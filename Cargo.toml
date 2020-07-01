@@ -1,0 +1,16 @@
+[package]
+name = "bicode_core"
+version = "0.1.0"
+authors = ["Zoey Riordan <zoey@dos.cafe>"]
+
+[dependencies.byteorder]
+version = "1.3"
+default-features = false
+
+[dependencies.serde]
+version = "1.0"
+default-features = false
+
+[features]
+std = []
+alloc = ["serde/alloc"]
