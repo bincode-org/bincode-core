@@ -1,7 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
 
-use bincode_embedded::*;
+use bincode_core::buffer_writer::BufferWriter;
+use bincode_core::{config::DefaultOptions, deserialize::deserialize, serialize::serialize};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TestStruct {
@@ -29,7 +30,8 @@ fn simple_struct() {
 
     let mut buffer = [0u8; 100];
     let mut writer = BufferWriter::new(&mut buffer);
-    serialize::<_, _, byteorder::NetworkEndian>(&s, &mut writer).unwrap();
+    let options = DefaultOptions::new();
+    serialize(&s, &mut writer, options).unwrap();
     println!("Buffer: {:?}", writer.written_buffer());
 
     // type         size
@@ -42,8 +44,7 @@ fn simple_struct() {
     // [u8; 3]      3 (fixed array so no length)
     assert_eq!(1 + 2 + 4 + 8 + 16 + 1 + 1 + 3, writer.written_len());
 
-    let deserialized: TestStruct =
-        deserialize::<_, _, byteorder::NetworkEndian>(&buffer[..]).unwrap();
+    let deserialized: TestStruct = deserialize(&buffer[..], options).unwrap();
     assert_eq!(s, deserialized);
 }
 
@@ -53,17 +54,17 @@ fn simple_tuple() {
 
     let mut buffer = [0u8; 100];
     let mut writer = BufferWriter::new(&mut buffer);
-    serialize::<_, _, byteorder::NetworkEndian>(&s, &mut writer).unwrap();
+    let options = DefaultOptions::new();
+    serialize(&s, &mut writer, options).unwrap();
     println!("Buffer: {:?}", writer.written_buffer());
 
     // type         size
     // u16          2
     // u32          4
-    // &[u8]        2 (len) + 4 (byte content)
-    // &str         2 (len) + 4 (str content)
-    assert_eq!(2 + 4 + 2 + 4 + 2 + 4, writer.written_len());
+    // &[u8]        1 (len) + 4 (byte content)
+    // &str         1 (len) + 4 (str content)
+    assert_eq!(2 + 4 + 1 + 4 + 1 + 4, writer.written_len());
 
-    let deserialized: (u16, u32, &[u8], &str) =
-        deserialize::<_, _, byteorder::NetworkEndian>(&buffer[..]).unwrap();
+    let deserialized: (u16, u32, &[u8], &str) = deserialize(&buffer[..], options).unwrap();
     assert_eq!(s, deserialized);
 }

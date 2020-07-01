@@ -1,6 +1,6 @@
 use super::*;
-use config::InternalOptions;
-use core::str;
+use config::{BincodeByteOrder, IntEncoding, InternalOptions, LimitError, SizeLimit};
+use core::{marker::PhantomData, str};
 use serde::{de::*, serde_if_integer128};
 
 /// Deserialize a given object from the given [CoreRead] object.
@@ -17,7 +17,8 @@ use serde::{de::*, serde_if_integer128};
 /// ```
 /// # extern crate serde_derive;
 /// # use serde_derive::Deserialize;
-/// # use bincode_embedded::deserialize;
+/// # use bincode_core::deserialize::deserialize;
+/// # use bincode_core::config::DefaultOptions;
 ///
 /// #[derive(Deserialize, PartialEq, Debug)]
 /// pub struct SomeStruct {
@@ -28,14 +29,19 @@ use serde::{de::*, serde_if_integer128};
 ///     3, // a
 ///     6, // b
 /// ];
-/// let val = deserialize::<SomeStruct, _, byteorder::NetworkEndian>(&buffer[..]).unwrap();
+/// let options = DefaultOptions::new();
+/// let val: SomeStruct = deserialize(&buffer[..], options).unwrap();
 /// assert_eq!(val, SomeStruct { a: 3, b: 6 });
 /// ```
 pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: InternalOptions>(
     reader: R,
     options: O,
 ) -> Result<T, DeserializeError<'a, R>> {
-    let mut deserializer = Deserializer::<'a, R, O> { reader, options };
+    let mut deserializer = Deserializer {
+        reader,
+        options,
+        _lifetime: PhantomData,
+    };
     T::deserialize(&mut deserializer)
 }
 
@@ -55,6 +61,15 @@ pub enum DeserializeError<'a, R: CoreRead<'a>> {
 
     /// Invalid value for the `Option` part of `Option<T>`. Only `0` and `1` are accepted values.
     InvalidOptionValue(u8),
+
+    /// Limit error reached. See the inner exception for more info.
+    LimitError(LimitError),
+
+    /// Could not cast from type `from_type` to type `to_type`. Usually this means that the data is encoded with a different version or protocol.
+    InvalidCast {
+        from_type: &'static str,
+        to_type: &'static str,
+    },
 
     /// Custom error value
     #[deprecated]
@@ -83,6 +98,10 @@ impl<'a, R: CoreRead<'a>> core::fmt::Debug for DeserializeError<'a, R> {
             DeserializeError::InvalidOptionValue(e) => {
                 write!(fmt, "Invalid Option value, got {}, expected 0 or 1", e)
             }
+            DeserializeError::LimitError(e) => write!(fmt, "Limit error {:?}", e),
+            DeserializeError::InvalidCast { from_type, to_type } => {
+                write!(fmt, "Could not cast from {:?} to {:?}", from_type, to_type)
+            }
             DeserializeError::Custom(msg) => write!(fmt, "{}", msg),
         }
     }
@@ -105,8 +124,61 @@ impl<'a, R: CoreRead<'a>> Error for DeserializeError<'a, R> {
 pub struct Deserializer<'a, R: CoreRead<'a> + 'a, O: InternalOptions> {
     reader: R,
     options: O,
+    _lifetime: PhantomData<&'a ()>,
 }
 
+macro_rules! impl_deserialize_literal {
+    ($name:ident : $ty:ty = $read:ident()) => {
+        #[inline]
+        pub(crate) fn $name(&mut self) -> Result<$ty, DeserializeError<'a, R>> {
+            self.read_literal_type::<$ty>()?;
+            let buffer = self
+                .reader
+                .read_range(core::mem::size_of::<$ty>())
+                .map_err(DeserializeError::Read)?;
+            Ok(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::$read(&buffer))
+        }
+    };
+}
+
+impl<'a, R: CoreRead<'a> + 'a, O: InternalOptions> Deserializer<'a, R, O> {
+    pub(crate) fn deserialize_byte(&mut self) -> Result<u8, DeserializeError<'a, R>> {
+        self.read_literal_type::<u8>()?;
+        self.reader.read().map_err(DeserializeError::Read)
+    }
+
+    impl_deserialize_literal! { deserialize_literal_u16 : u16 = read_u16() }
+    impl_deserialize_literal! { deserialize_literal_u32 : u32 = read_u32() }
+    impl_deserialize_literal! { deserialize_literal_u64 : u64 = read_u64() }
+
+    serde_if_integer128! {
+        impl_deserialize_literal! { deserialize_literal_u128 : u128 = read_u128() }
+    }
+
+    fn read_bytes(&mut self, count: u64) -> Result<(), DeserializeError<'a, R>> {
+        self.options
+            .limit()
+            .add(count)
+            .map_err(DeserializeError::LimitError)
+    }
+
+    fn read_literal_type<T>(&mut self) -> Result<(), DeserializeError<'a, R>> {
+        self.read_bytes(core::mem::size_of::<T>() as u64)
+    }
+
+    #[cfg(feature = "alloc")]
+    fn read_vec(&mut self) -> Result<Vec<u8>> {
+        let len = O::IntEncoding::deserialize_len(self)?;
+        self.read_bytes(len as u64)?;
+        self.reader.get_byte_buffer(len)
+    }
+
+    #[cfg(feature = "alloc")]
+    fn read_string(&mut self) -> Result<String> {
+        let vec = self.read_vec()?;
+        String::from_utf8(vec).map_err(|e| ErrorKind::InvalidUtf8Encoding(e.utf8_error()).into())
+    }
+}
 impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
     for &'b mut Deserializer<'a, R, O>
 {
@@ -132,23 +204,29 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
 
     fn deserialize_i16<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(2).map_err(DeserializeError::Read)?;
-        visitor.visit_i16(O::Endian::read_i16(&buffer))
+        visitor.visit_i16(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i16(&buffer),
+        )
     }
 
     fn deserialize_i32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_i32(O::Endian::read_i32(&buffer))
+        visitor.visit_i32(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i32(&buffer),
+        )
     }
 
     fn deserialize_i64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_i64(O::Endian::read_i64(&buffer))
+        visitor.visit_i64(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i64(&buffer),
+        )
     }
 
     serde_if_integer128! {
         fn deserialize_i128<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
             let buffer = self.reader.read_range(16).map_err(DeserializeError::Read)?;
-            visitor.visit_i128(O::Endian::read_i128(&buffer))
+            visitor.visit_i128(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i128(&buffer))
         }
     }
 
@@ -159,34 +237,44 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
 
     fn deserialize_u16<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(2).map_err(DeserializeError::Read)?;
-        visitor.visit_u16(O::Endian::read_u16(&buffer))
+        visitor.visit_u16(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u16(&buffer),
+        )
     }
 
     fn deserialize_u32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_u32(O::Endian::read_u32(&buffer))
+        visitor.visit_u32(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u32(&buffer),
+        )
     }
 
     fn deserialize_u64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_u64(O::Endian::read_u64(&buffer))
+        visitor.visit_u64(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u64(&buffer),
+        )
     }
 
     serde_if_integer128! {
         fn deserialize_u128<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
             let buffer = self.reader.read_range(16).map_err(DeserializeError::Read)?;
-            visitor.visit_u128(O::Endian::read_u128(&buffer))
+            visitor.visit_u128(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u128(&buffer))
         }
     }
 
     fn deserialize_f32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_f32(O::Endian::read_f32(&buffer))
+        visitor.visit_f32(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f32(&buffer),
+        )
     }
 
     fn deserialize_f64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_f64(O::Endian::read_f64(&buffer))
+        visitor.visit_f64(
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f64(&buffer),
+        )
     }
 
     fn deserialize_char<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
@@ -213,8 +301,8 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
         visitor.visit_char(res)
     }
 
-    fn deserialize_str<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let length = O::deserialize_len(&mut self.reader)?; // .map_err(DeserializeError::Read)?;
+    fn deserialize_str<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
         let buf = self
             .reader
             .read_range(length)
@@ -228,8 +316,8 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let length = O::deserialize_len(&mut self.reader)?; // .map_err(DeserializeError::Read)?;
+    fn deserialize_bytes<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
         let buf = self
             .reader
             .read_range(length)
@@ -272,8 +360,8 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let len = O::IntEncoding::deserialize_len(&mut self.reader)?; // .map_err(DeserializeError::Read)?;
+    fn deserialize_seq<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        let len = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
         self.deserialize_tuple(len, visitor)
     }
 
@@ -282,13 +370,13 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
         len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        struct Access<'a, 'b, R: CoreRead<'a> + 'a, B: byteorder::ByteOrder + 'static> {
-            deserializer: &'b mut Deserializer<'a, R, B>,
+        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> {
+            deserializer: &'b mut Deserializer<'a, R, O>,
             len: usize,
         }
 
-        impl<'a, 'b, R: CoreRead<'a> + 'a, B: byteorder::ByteOrder + 'static>
-            serde::de::SeqAccess<'a> for Access<'a, 'b, R, B>
+        impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::de::SeqAccess<'a>
+            for Access<'a, 'b, R, O>
         {
             type Error = DeserializeError<'a, R>;
 
@@ -329,13 +417,13 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
     }
 
     fn deserialize_map<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        struct Access<'a, 'b, R: CoreRead<'a> + 'a, B: byteorder::ByteOrder + 'static> {
-            deserializer: &'b mut Deserializer<'a, R, B>,
+        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> {
+            deserializer: &'b mut Deserializer<'a, R, O>,
             len: usize,
         }
 
-        impl<'a, 'b, R: CoreRead<'a> + 'a, B: byteorder::ByteOrder + 'static>
-            serde::de::MapAccess<'a> for Access<'a, 'b, R, B>
+        impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::de::MapAccess<'a>
+            for Access<'a, 'b, R, O>
         {
             type Error = DeserializeError<'a, R>;
 

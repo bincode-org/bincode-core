@@ -12,9 +12,13 @@ pub(crate) use self::trailing::TrailingBytes;
 
 pub use self::endian::{BigEndian, LittleEndian, NativeEndian};
 pub use self::int::{FixintEncoding, VarintEncoding};
-pub use self::limit::{Bounded, Infinite};
+pub use self::limit::{Bounded, Infinite, LimitError};
 pub use self::trailing::{AllowTrailing, RejectTrailing};
-use crate::traits::{CoreRead, CoreWrite};
+use crate::{
+    deserialize::DeserializeError,
+    serialize::SerializeError,
+    traits::{CoreRead, CoreWrite},
+};
 
 mod endian;
 mod int;
@@ -138,8 +142,11 @@ pub trait Options: InternalOptions + Sized {
 
     /// Returns the size that an object would be if serialized using Bincode with this configuration
     #[inline(always)]
-    fn serialized_size<T: ?Sized + serde::Serialize>(self, t: &T) -> Result<u64> {
-        crate::serialize::serialized_size(t, self)
+    fn serialized_size<T: ?Sized + serde::Serialize, W: CoreWrite>(
+        self,
+        t: &T,
+    ) -> Result<u64, SerializeError<W>> {
+        crate::serialize::serialize_size(t, self)
     }
 
     /// Serializes an object directly into a `Writer` using this configuration
@@ -147,35 +154,37 @@ pub trait Options: InternalOptions + Sized {
     /// If the serialization would take more bytes than allowed by the size limit, an error
     /// is returned and *no bytes* will be written into the `Writer`
     #[inline(always)]
-    fn serialize_into<W: CoreWrite, T: ?Sized + serde::Serialize>(self, w: W, t: &T) -> Result<()> {
-        crate::serialize::serialize_into(w, t, self)
+    fn serialize_into<W: CoreWrite, T: ?Sized + serde::Serialize>(
+        self,
+        w: W,
+        t: &T,
+    ) -> Result<(), SerializeError<W>> {
+        crate::serialize::serialize(t, w, self)
     }
 
     /// Deserializes a slice of bytes into an instance of `T` using this configuration
     #[inline(always)]
-    fn deserialize<'a, T: serde::Deserialize<'a>>(self, bytes: &'a [u8]) -> Result<T> {
-        deserialize(bytes, self)
+    fn deserialize<'a, T: serde::Deserialize<'a>>(
+        self,
+        bytes: &'a [u8],
+    ) -> Result<T, DeserializeError<'a, &'a [u8]>> {
+        crate::deserialize::deserialize(bytes, self)
     }
 
     /// TODO: document
     #[doc(hidden)]
     #[inline(always)]
-    fn deserialize_in_place<'a, R, T>(self, reader: R, place: &mut T) -> Result<()>
+    fn deserialize_in_place<'a, R, T>(
+        self,
+        reader: R,
+        place: &mut T,
+    ) -> Result<(), DeserializeError<'a, R>>
     where
-        R: CoreRead<'a>,
+        R: CoreRead<'a> + 'a,
         T: serde::de::Deserialize<'a>,
     {
-        deserialize_in_place(reader, self, place)
-    }
-
-    /// Deserializes a slice of bytes with state `seed` using this configuration.
-    #[inline(always)]
-    fn deserialize_seed<'a, T: serde::de::DeserializeSeed<'a>>(
-        self,
-        seed: T,
-        bytes: &'a [u8],
-    ) -> Result<T::Value> {
-        deserialize_seed(seed, bytes, self)
+        *place = crate::deserialize::deserialize(reader, self)?;
+        Ok(())
     }
 
     /// Deserializes an object directly from a `Read`er using this configuration
@@ -185,46 +194,6 @@ pub trait Options: InternalOptions + Sized {
     #[cfg(feature = "alloc")]
     fn deserialize_from<R: Read, T: serde::de::DeserializeOwned>(self, reader: R) -> Result<T> {
         deserialize_from(reader, self)
-    }
-
-    /// Deserializes an object directly from a `Read`er with state `seed` using this configuration
-    ///
-    /// If this returns an `Error`, `reader` may be in an invalid state.
-    #[inline(always)]
-    #[cfg(feature = "alloc")]
-    fn deserialize_from_seed<'a, R: Read, T: serde::de::DeserializeSeed<'a>>(
-        self,
-        seed: T,
-        reader: R,
-    ) -> Result<T::Value> {
-        deserialize_from_seed(seed, reader, self)
-    }
-
-    /// Deserializes an object from a custom `CoreRead`er using the default configuration.
-    /// It is highly recommended to use `deserialize_from` unless you need to implement
-    /// `CoreRead` for performance reasons.
-    ///
-    /// If this returns an `Error`, `reader` may be in an invalid state.
-    #[inline(always)]
-    fn deserialize_from_custom<'a, R: CoreRead<'a>, T: serde::de::DeserializeOwned>(
-        self,
-        reader: R,
-    ) -> Result<T> {
-        deserialize_from_custom(reader, self)
-    }
-
-    /// Deserializes an object from a custom `CoreRead`er with state `seed` using the default
-    /// configuration. It is highly recommended to use `deserialize_from` unless you need to
-    /// implement `CoreRead` for performance reasons.
-    ///
-    /// If this returns an `Error`, `reader` may be in an invalid state.
-    #[inline(always)]
-    fn deserialize_from_custom_seed<'a, R: CoreRead<'a>, T: serde::de::DeserializeSeed<'a>>(
-        self,
-        seed: T,
-        reader: R,
-    ) -> Result<T::Value> {
-        deserialize_from_custom_seed(seed, reader, self)
     }
 }
 

@@ -67,33 +67,33 @@ pub trait IntEncoding {
     /// Deserializes a sequence length.
     #[inline(always)]
     fn deserialize_len<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<usize, DeserializeError<'de, R>> {
         Self::deserialize_u64(de).and_then(cast_u64_to_usize)
     }
 
     fn deserialize_u16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u16, DeserializeError<'de, R>>;
 
     fn deserialize_u32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u32, DeserializeError<'de, R>>;
 
     fn deserialize_u64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u64, DeserializeError<'de, R>>;
 
     fn deserialize_i16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i16, DeserializeError<'de, R>>;
 
     fn deserialize_i32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i32, DeserializeError<'de, R>>;
 
     fn deserialize_i64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i64, DeserializeError<'de, R>>;
 
     serde_if_integer128! {
@@ -104,14 +104,14 @@ pub trait IntEncoding {
             val: u128,
         ) -> Result<(), SerializeError<W>>;
         fn deserialize_u128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<u128, DeserializeError<'de, R>>;
         fn serialize_i128<W: CoreWrite, O: Options>(
             ser: &mut Serializer<W, O>,
             val: i128,
         ) -> Result<(), SerializeError<W>>;
         fn deserialize_i128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<i128, DeserializeError<'de, R>>;
     }
 }
@@ -239,7 +239,7 @@ impl VarintEncoding {
     }
 
     fn deserialize_varint<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u64, DeserializeError<'de, R>> {
         #[allow(ellipsis_inclusive_range_patterns)]
         match de.deserialize_byte()? {
@@ -309,7 +309,7 @@ impl VarintEncoding {
         }
 
         fn deserialize_varint128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<u128, DeserializeError<'de, R>> {
             #[allow(ellipsis_inclusive_range_patterns)]
             match de.deserialize_byte()? {
@@ -397,38 +397,38 @@ impl IntEncoding for FixintEncoding {
 
     #[inline(always)]
     fn deserialize_u16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u16, DeserializeError<'de, R>> {
         de.deserialize_literal_u16()
     }
     #[inline(always)]
     fn deserialize_u32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u32, DeserializeError<'de, R>> {
         de.deserialize_literal_u32()
     }
     #[inline(always)]
     fn deserialize_u64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u64, DeserializeError<'de, R>> {
         de.deserialize_literal_u64()
     }
 
     #[inline(always)]
     fn deserialize_i16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i16, DeserializeError<'de, R>> {
         Ok(de.deserialize_literal_u16()? as i16)
     }
     #[inline(always)]
     fn deserialize_i32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i32, DeserializeError<'de, R>> {
         Ok(de.deserialize_literal_u32()? as i32)
     }
     #[inline(always)]
     fn deserialize_i64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i64, DeserializeError<'de, R>> {
         Ok(de.deserialize_literal_u64()? as i64)
     }
@@ -459,13 +459,13 @@ impl IntEncoding for FixintEncoding {
         }
         #[inline(always)]
         fn deserialize_u128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<u128, DeserializeError<'de, R>> {
             de.deserialize_literal_u128()
         }
         #[inline(always)]
         fn deserialize_i128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<i128, DeserializeError<'de, R>> {
             Ok(de.deserialize_literal_u128()? as i128)
         }
@@ -545,26 +545,26 @@ impl IntEncoding for VarintEncoding {
 
     #[inline(always)]
     fn deserialize_u16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u16, DeserializeError<'de, R>> {
         Self::deserialize_varint(de).and_then(cast_u64_to_u16)
     }
     #[inline(always)]
     fn deserialize_u32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u32, DeserializeError<'de, R>> {
         Self::deserialize_varint(de).and_then(cast_u64_to_u32)
     }
     #[inline(always)]
     fn deserialize_u64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<u64, DeserializeError<'de, R>> {
         Self::deserialize_varint(de)
     }
 
     #[inline(always)]
     fn deserialize_i16<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i16, DeserializeError<'de, R>> {
         Self::deserialize_varint(de)
             .map(Self::zigzag_decode)
@@ -572,7 +572,7 @@ impl IntEncoding for VarintEncoding {
     }
     #[inline(always)]
     fn deserialize_i32<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i32, DeserializeError<'de, R>> {
         Self::deserialize_varint(de)
             .map(Self::zigzag_decode)
@@ -580,7 +580,7 @@ impl IntEncoding for VarintEncoding {
     }
     #[inline(always)]
     fn deserialize_i64<'de, R: CoreRead<'de>, O: Options>(
-        de: &mut Deserializer<R, O>,
+        de: &mut Deserializer<'de, R, O>,
     ) -> Result<i64, DeserializeError<'de, R>> {
         Self::deserialize_varint(de).map(Self::zigzag_decode)
     }
@@ -610,54 +610,71 @@ impl IntEncoding for VarintEncoding {
         }
         #[inline(always)]
         fn deserialize_u128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<u128, DeserializeError<'de, R>> {
             Self::deserialize_varint128(de)
         }
         #[inline(always)]
         fn deserialize_i128<'de, R: CoreRead<'de>, O: Options>(
-            de: &mut Deserializer<R, O>,
+            de: &mut Deserializer<'de, R, O>,
         ) -> Result<i128, DeserializeError<'de, R>> {
             Self::deserialize_varint128(de).map(Self::zigzag128_decode)
         }
     }
 }
 
-fn cast_u64_to_usize(n: u64) -> Option<usize> {
+fn cast_u64_to_usize<'de, R: CoreRead<'de> + 'de>(
+    n: u64,
+) -> Result<usize, DeserializeError<'de, R>> {
     if n <= usize::max_value() as u64 {
-        Some(n as usize)
+        Ok(n as usize)
     } else {
-        None
+        Err(DeserializeError::InvalidCast {
+            from_type: "u64",
+            to_type: "usize",
+        })
     }
 }
-fn cast_u64_to_u32(n: u64) -> Option<u32> {
+fn cast_u64_to_u32<'de, R: CoreRead<'de> + 'de>(n: u64) -> Result<u32, DeserializeError<'de, R>> {
     if n <= u32::max_value() as u64 {
-        Some(n as u32)
+        Ok(n as u32)
     } else {
-        None
+        Err(DeserializeError::InvalidCast {
+            from_type: "u64",
+            to_type: "u32",
+        })
     }
 }
-fn cast_u64_to_u16(n: u64) -> Option<u16> {
+fn cast_u64_to_u16<'de, R: CoreRead<'de> + 'de>(n: u64) -> Result<u16, DeserializeError<'de, R>> {
     if n <= u16::max_value() as u64 {
-        Some(n as u16)
+        Ok(n as u16)
     } else {
-        None
+        Err(DeserializeError::InvalidCast {
+            from_type: "u64",
+            to_type: "u16",
+        })
     }
 }
 
-fn cast_i64_to_i32(n: i64) -> Option<i32> {
+fn cast_i64_to_i32<'de, R: CoreRead<'de> + 'de>(n: i64) -> Result<i32, DeserializeError<'de, R>> {
     if n <= i32::max_value() as i64 && n >= i32::min_value() as i64 {
-        Some(n as i32)
+        Ok(n as i32)
     } else {
-        None
+        Err(DeserializeError::InvalidCast {
+            from_type: "i64",
+            to_type: "i32",
+        })
     }
 }
 
-fn cast_i64_to_i16(n: i64) -> Option<i16> {
+fn cast_i64_to_i16<'de, R: CoreRead<'de> + 'de>(n: i64) -> Result<i16, DeserializeError<'de, R>> {
     if n <= i16::max_value() as i64 && n >= i16::min_value() as i64 {
-        Some(n as i16)
+        Ok(n as i16)
     } else {
-        None
+        Err(DeserializeError::InvalidCast {
+            from_type: "i64",
+            to_type: "i16",
+        })
     }
 }
 

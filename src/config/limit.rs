@@ -2,9 +2,23 @@
 pub trait SizeLimit {
     /// Tells the SizeLimit that a certain number of bytes has been
     /// read or written.  Returns Err if the limit has been exceeded.
-    fn add(&mut self, n: u64) -> Result<(), ()>;
+    fn add(&mut self, n: u64) -> Result<(), LimitError>;
     /// Returns the hard limit (if one exists)
     fn limit(&self) -> Option<u64>;
+}
+
+#[non_exhaustive]
+pub enum LimitError {
+    /// Reached the limit of the given size
+    LimitReached,
+}
+
+impl core::fmt::Debug for LimitError {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            LimitError::LimitReached => write!(fmt, "Limit reached"),
+        }
+    }
 }
 
 /// A SizeLimit that restricts serialized or deserialized messages from
@@ -19,12 +33,12 @@ pub struct Infinite;
 
 impl SizeLimit for Bounded {
     #[inline(always)]
-    fn add(&mut self, n: u64) -> Result<(), ()> {
+    fn add(&mut self, n: u64) -> Result<(), LimitError> {
         if self.0 >= n {
             self.0 -= n;
             Ok(())
         } else {
-            Err(())
+            Err(LimitError::LimitReached)
         }
     }
 
@@ -36,7 +50,7 @@ impl SizeLimit for Bounded {
 
 impl SizeLimit for Infinite {
     #[inline(always)]
-    fn add(&mut self, _: u64) -> Result<(), ()> {
+    fn add(&mut self, _: u64) -> Result<(), LimitError> {
         Ok(())
     }
 

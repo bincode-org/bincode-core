@@ -37,3 +37,21 @@ pub trait CoreRead<'a> {
     /// panic when a differently sized slice is returned.
     fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error>;
 }
+
+impl<'a> CoreRead<'a> for &'a [u8] {
+    type Error = SliceReadError;
+
+    fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error> {
+        if len > self.len() {
+            return Err(SliceReadError::EndOfSlice);
+        }
+        let result = &self[..len];
+        *self = &self[len..];
+        Ok(result)
+    }
+}
+
+#[derive(Debug)]
+pub enum SliceReadError {
+    EndOfSlice,
+}

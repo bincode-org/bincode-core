@@ -1,5 +1,5 @@
 use super::*;
-use config::InternalOptions;
+use config::{BincodeByteOrder, IntEncoding, InternalOptions};
 use serde::{ser::*, serde_if_integer128};
 
 /// Serialize a given `T` type into a given `CoreWrite` writer with the given `B` byte order.
@@ -13,7 +13,7 @@ use serde::{ser::*, serde_if_integer128};
 /// - BigEndian
 /// - LittleEndian
 /// - NetworkEndian.
-pub fn serialize<T: serde::Serialize, W: CoreWrite, O: InternalOptions>(
+pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: InternalOptions>(
     value: &T,
     writer: W,
     options: O,
@@ -29,10 +29,10 @@ pub fn serialize<T: serde::Serialize, W: CoreWrite, O: InternalOptions>(
 /// let len = writer.bytes_written();
 /// ```
 /// But without actually writing to memory
-pub fn serialize_size<T: serde::Serialize, W: CoreWrite, O: InternalOptions>(
+pub fn serialize_size<T: serde::Serialize + ?Sized, W: CoreWrite, O: InternalOptions>(
     value: &T,
     options: O,
-) -> Result<usize, SerializeError<W>> {
+) -> Result<u64, SerializeError<W>> {
     unimplemented!()
 }
 
@@ -74,6 +74,32 @@ pub struct Serializer<W: CoreWrite, O: InternalOptions> {
     options: O,
 }
 
+macro_rules! impl_serialize_literal {
+    ($ser_method:ident($ty:ty) = $write:ident()) => {
+        pub(crate) fn $ser_method(&mut self, v: $ty) -> Result<(), SerializeError<W>> {
+            const LEN: usize = core::mem::size_of::<$ty>();
+
+            let mut buf = [0u8; LEN];
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::$write(&mut buf, v);
+            self.writer.write_all(&buf).map_err(SerializeError::Write)
+        }
+    };
+}
+
+impl<W: CoreWrite, O: InternalOptions> Serializer<W, O> {
+    pub(crate) fn serialize_byte(&mut self, v: u8) -> Result<(), SerializeError<W>> {
+        self.writer.write(v).map_err(SerializeError::Write)
+    }
+
+    impl_serialize_literal! {serialize_literal_u16(u16) = write_u16()}
+    impl_serialize_literal! {serialize_literal_u32(u32) = write_u32()}
+    impl_serialize_literal! {serialize_literal_u64(u64) = write_u64()}
+
+    serde_if_integer128! {
+        impl_serialize_literal!{serialize_literal_u128(u128) = write_u128()}
+    }
+}
+
 impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Serializer<W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
@@ -95,26 +121,26 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
 
     fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 2];
-        O::Endian::write_i16(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i16(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 4];
-        O::Endian::write_i32(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i32(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 8];
-        O::Endian::write_i64(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i64(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     serde_if_integer128! {
         fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
             let mut buf = [0u8; 16];
-            O::Endian::write_i128(&mut buf, v);
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i128(&mut buf, v);
             self.writer.write_all(&buf).map_err(SerializeError::Write)
         }
     }
@@ -125,39 +151,39 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
 
     fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 2];
-        O::Endian::write_u16(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u16(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 4];
-        O::Endian::write_u32(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u32(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 8];
-        O::Endian::write_u64(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u64(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     serde_if_integer128! {
         fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
             let mut buf = [0u8; 16];
-            O::Endian::write_u128(&mut buf, v);
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u128(&mut buf, v);
             self.writer.write_all(&buf).map_err(SerializeError::Write)
         }
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 4];
-        O::Endian::write_f32(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_f32(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
         let mut buf = [0u8; 8];
-        O::Endian::write_f64(&mut buf, v);
+        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_f64(&mut buf, v);
         self.writer.write_all(&buf).map_err(SerializeError::Write)
     }
 
@@ -168,14 +194,14 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
     }
 
     fn serialize_str(mut self, v: &str) -> Result<Self::Ok, Self::Error> {
-        O::serialize_len(&mut self, v.len())?;
+        O::IntEncoding::serialize_len(&mut self, v.len())?;
         self.writer
             .write_all(v.as_bytes())
             .map_err(SerializeError::Write)
     }
 
     fn serialize_bytes(mut self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        O::serialize_len(&mut self, v.len())?;
+        O::IntEncoding::serialize_len(&mut self, v.len())?;
         self.writer.write_all(v).map_err(SerializeError::Write)
     }
 
@@ -205,7 +231,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
         variant_index: u32,
         _variant: &'static str,
     ) -> Result<Self::Ok, Self::Error> {
-        O::serialize_u32(&mut self, variant_index)?;
+        O::IntEncoding::serialize_u32(&mut self, variant_index)
     }
 
     fn serialize_newtype_struct<T: ?Sized>(
@@ -229,17 +255,17 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
     where
         T: Serialize,
     {
-        O::serialize_u32(&mut self, variant_index)?;
+        O::IntEncoding::serialize_u32(&mut self, variant_index)?;
         value.serialize(self)
     }
 
     fn serialize_seq(mut self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
-        O::serialize_len(&mut self, len)?;
-        Ok(Compound(self))
+        O::IntEncoding::serialize_len(&mut self, len.expect("Sequence has no elements"))?;
+        Ok(Compound { ser: self })
     }
 
     fn serialize_tuple(self, _len: usize) -> Result<Self::SerializeTuple, Self::Error> {
-        Ok(Compound(self))
+        Ok(Compound { ser: self })
     }
 
     fn serialize_tuple_struct(
@@ -247,7 +273,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Ok(Compound(self))
+        Ok(Compound { ser: self })
     }
 
     fn serialize_tuple_variant(
@@ -257,13 +283,13 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        O::serialize_u32(variant_index)?;
-        Ok(Compound(self))
+        O::IntEncoding::serialize_u32(&mut self, variant_index)?;
+        Ok(Compound { ser: self })
     }
 
     fn serialize_map(mut self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
-        O::serialize_usize(len)?;
-        Ok(Compound(self))
+        O::IntEncoding::serialize_len(&mut self, len.expect("Sequence has no elements"))?;
+        Ok(Compound { ser: self })
     }
 
     fn serialize_struct(
@@ -271,7 +297,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
         _name: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
-        Ok(Compound(self))
+        Ok(Compound { ser: self })
     }
 
     fn serialize_struct_variant(
@@ -281,8 +307,8 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
         _variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        O::serialize_u32(variant_index)?;
-        Ok(Compound(self))
+        O::IntEncoding::serialize_u32(&mut self, variant_index)?;
+        Ok(Compound { ser: self })
     }
 
     fn collect_str<T: ?Sized>(self, _value: &T) -> Result<Self::Ok, Self::Error>
@@ -298,7 +324,9 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
 }
 
 /// Internal struct needed for serialization.
-pub struct Compound<'a, W: CoreWrite, O: InternalOptions>(&'a mut Serializer<W, O>);
+pub struct Compound<'a, W: CoreWrite, O: InternalOptions> {
+    ser: &'a mut Serializer<W, O>,
+}
 
 impl<'a, W: CoreWrite, O: InternalOptions> SerializeSeq for Compound<'a, W, O> {
     type Ok = ();
@@ -336,9 +364,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeTuple for Compound<'a, W, O>
     }
 }
 
-impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeTupleStruct
-    for Compound<'a, W, B>
-{
+impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleStruct for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -356,9 +382,7 @@ impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeTupleStruct
     }
 }
 
-impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeTupleVariant
-    for Compound<'a, W, B>
-{
+impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleVariant for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -376,7 +400,7 @@ impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeTupleVariant
     }
 }
 
-impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeMap for Compound<'a, W, B> {
+impl<'a, W: CoreWrite, O: InternalOptions> SerializeMap for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -402,7 +426,7 @@ impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeMap for Compo
     }
 }
 
-impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeStruct for Compound<'a, W, B> {
+impl<'a, W: CoreWrite, O: InternalOptions> SerializeStruct for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -424,9 +448,7 @@ impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeStruct for Co
     }
 }
 
-impl<'a, W: CoreWrite, B: byteorder::ByteOrder + 'static> SerializeStructVariant
-    for Compound<'a, W, B>
-{
+impl<'a, W: CoreWrite, O: InternalOptions> SerializeStructVariant for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
