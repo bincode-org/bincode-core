@@ -1,5 +1,5 @@
 use super::*;
-use config::{BincodeByteOrder, IntEncoding, InternalOptions, LimitError, SizeLimit};
+use config::{BincodeByteOrder, IntEncoding, LimitError, Options, SizeLimit};
 use core::{marker::PhantomData, str};
 use serde::{de::*, serde_if_integer128};
 
@@ -33,7 +33,7 @@ use serde::{de::*, serde_if_integer128};
 /// let val: SomeStruct = deserialize(&buffer[..], options).unwrap();
 /// assert_eq!(val, SomeStruct { a: 3, b: 6 });
 /// ```
-pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: InternalOptions>(
+pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: Options>(
     reader: R,
     options: O,
 ) -> Result<T, DeserializeError<'a, R>> {
@@ -121,7 +121,7 @@ impl<'a, R: CoreRead<'a>> Error for DeserializeError<'a, R> {
 
 /// A deserializer that can be used to deserialize any `serde::Deserialize` type from a given
 /// [CoreRead] reader.
-pub struct Deserializer<'a, R: CoreRead<'a> + 'a, O: InternalOptions> {
+pub struct Deserializer<'a, R: CoreRead<'a> + 'a, O: Options> {
     reader: R,
     options: O,
     _lifetime: PhantomData<&'a ()>,
@@ -141,7 +141,7 @@ macro_rules! impl_deserialize_literal {
     };
 }
 
-impl<'a, R: CoreRead<'a> + 'a, O: InternalOptions> Deserializer<'a, R, O> {
+impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
     pub(crate) fn deserialize_byte(&mut self) -> Result<u8, DeserializeError<'a, R>> {
         self.read_literal_type::<u8>()?;
         self.reader.read().map_err(DeserializeError::Read)
@@ -179,7 +179,7 @@ impl<'a, R: CoreRead<'a> + 'a, O: InternalOptions> Deserializer<'a, R, O> {
         String::from_utf8(vec).map_err(|e| ErrorKind::InvalidUtf8Encoding(e.utf8_error()).into())
     }
 }
-impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
+impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     for &'b mut Deserializer<'a, R, O>
 {
     type Error = DeserializeError<'a, R>;
@@ -370,14 +370,12 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
         len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> {
+        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: Options> {
             deserializer: &'b mut Deserializer<'a, R, O>,
             len: usize,
         }
 
-        impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::de::SeqAccess<'a>
-            for Access<'a, 'b, R, O>
-        {
+        impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::de::SeqAccess<'a> for Access<'a, 'b, R, O> {
             type Error = DeserializeError<'a, R>;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -417,14 +415,12 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::Deserializer<'a>
     }
 
     fn deserialize_map<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> {
+        struct Access<'a, 'b, R: CoreRead<'a> + 'a, O: Options> {
             deserializer: &'b mut Deserializer<'a, R, O>,
             len: usize,
         }
 
-        impl<'a, 'b, R: CoreRead<'a> + 'a, O: InternalOptions> serde::de::MapAccess<'a>
-            for Access<'a, 'b, R, O>
-        {
+        impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::de::MapAccess<'a> for Access<'a, 'b, R, O> {
             type Error = DeserializeError<'a, R>;
 
             fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>

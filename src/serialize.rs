@@ -1,5 +1,5 @@
 use super::*;
-use config::{BincodeByteOrder, IntEncoding, InternalOptions};
+use config::{BincodeByteOrder, IntEncoding, Options};
 use serde::{ser::*, serde_if_integer128};
 
 /// Serialize a given `T` type into a given `CoreWrite` writer with the given `B` byte order.
@@ -13,7 +13,7 @@ use serde::{ser::*, serde_if_integer128};
 /// - BigEndian
 /// - LittleEndian
 /// - NetworkEndian.
-pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: InternalOptions>(
+pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
     value: &T,
     writer: W,
     options: O,
@@ -29,7 +29,7 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: InternalOptions>
 /// let len = writer.bytes_written();
 /// ```
 /// But without actually writing to memory
-pub fn serialize_size<T: serde::Serialize + ?Sized, W: CoreWrite, O: InternalOptions>(
+pub fn serialize_size<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
     value: &T,
     options: O,
 ) -> Result<u64, SerializeError<W>> {
@@ -69,7 +69,7 @@ impl<W: CoreWrite> serde::ser::Error for SerializeError<W> {
 
 /// A serializer that can serialize any value that implements `serde::Serialize` into a given
 /// [CoreWrite] writer.
-pub struct Serializer<W: CoreWrite, O: InternalOptions> {
+pub struct Serializer<W: CoreWrite, O: Options> {
     writer: W,
     options: O,
 }
@@ -86,7 +86,7 @@ macro_rules! impl_serialize_literal {
     };
 }
 
-impl<W: CoreWrite, O: InternalOptions> Serializer<W, O> {
+impl<W: CoreWrite, O: Options> Serializer<W, O> {
     pub(crate) fn serialize_byte(&mut self, v: u8) -> Result<(), SerializeError<W>> {
         self.writer.write(v).map_err(SerializeError::Write)
     }
@@ -100,7 +100,7 @@ impl<W: CoreWrite, O: InternalOptions> Serializer<W, O> {
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Serializer<W, O> {
+impl<'a, W: CoreWrite, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
     type SerializeSeq = Compound<'a, W, O>;
@@ -324,11 +324,11 @@ impl<'a, W: CoreWrite, O: InternalOptions> serde::Serializer for &'a mut Seriali
 }
 
 /// Internal struct needed for serialization.
-pub struct Compound<'a, W: CoreWrite, O: InternalOptions> {
+pub struct Compound<'a, W: CoreWrite, O: Options> {
     ser: &'a mut Serializer<W, O>,
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeSeq for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeSeq for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -346,7 +346,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeSeq for Compound<'a, W, O> {
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeTuple for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeTuple for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -364,7 +364,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeTuple for Compound<'a, W, O>
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleStruct for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeTupleStruct for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -382,7 +382,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleStruct for Compound<'a,
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleVariant for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeTupleVariant for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -400,7 +400,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeTupleVariant for Compound<'a
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeMap for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeMap for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -426,7 +426,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeMap for Compound<'a, W, O> {
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeStruct for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeStruct for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 
@@ -448,7 +448,7 @@ impl<'a, W: CoreWrite, O: InternalOptions> SerializeStruct for Compound<'a, W, O
     }
 }
 
-impl<'a, W: CoreWrite, O: InternalOptions> SerializeStructVariant for Compound<'a, W, O> {
+impl<'a, W: CoreWrite, O: Options> SerializeStructVariant for Compound<'a, W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
 

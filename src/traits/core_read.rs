@@ -34,7 +34,7 @@ pub trait CoreRead<'a> {
     /// persistent buffer as the returned value can be used for e.g. `&str` and `&[u8]`.
     ///
     /// The returned slice MUST be exactly the size that is requested. The deserializer will
-    /// panic when a differently sized slice is returned.
+    /// return `Self::Error` when a differently sized slice is returned.
     fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error>;
 }
 
