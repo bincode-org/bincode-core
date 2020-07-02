@@ -1,7 +1,11 @@
 use super::*;
 use config::{BincodeByteOrder, IntEncoding, LimitError, Options, SizeLimit};
+use core::str::Utf8Error;
 use core::{marker::PhantomData, str};
 use serde::{de::*, serde_if_integer128};
+
+// #[cfg(feature = "alloc")]
+// use alloc::{string::String, vec::Vec};
 
 /// Deserialize a given object from the given [CoreRead] object.
 ///
@@ -73,6 +77,9 @@ pub enum DeserializeError<'a, R: CoreRead<'a>> {
         to_type: &'static str,
     },
 
+    /// Invalid UTF8 encoding while trying to parse a `&str` or `String`
+    InvalidUtf8Encoding(Utf8Error),
+
     /// Invalid value (u128 range): you may have a version or configuration disagreement?
     InvalidValueRange,
 
@@ -106,6 +113,10 @@ impl<'a, R: CoreRead<'a>> core::fmt::Debug for DeserializeError<'a, R> {
             DeserializeError::InvalidCast { from_type, to_type } => {
                 write!(fmt, "Could not cast from {:?} to {:?}", from_type, to_type)
             }
+            DeserializeError::InvalidUtf8Encoding(error) => write!(
+                fmt,
+                "Invalid UTF8 encoding: {:?}", error
+            ),
             DeserializeError::InvalidValueRange => write!(
                 fmt,
                 "Invalid value (u128 range): you may have a version or configuration disagreement?"
@@ -177,18 +188,21 @@ impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
         self.read_bytes(core::mem::size_of::<T>() as u64)
     }
 
+    /*
     #[cfg(feature = "alloc")]
-    fn read_vec(&mut self) -> Result<Vec<u8>> {
+    fn read_vec(&mut self) -> Result<Vec<u8>, DeserializeError<'a, R>> {
         let len = O::IntEncoding::deserialize_len(self)?;
         self.read_bytes(len as u64)?;
-        self.reader.get_byte_buffer(len)
+        self.reader.read_vec(len).map_err(DeserializeError::Read)
     }
 
     #[cfg(feature = "alloc")]
-    fn read_string(&mut self) -> Result<String> {
+    fn read_string(&mut self) -> Result<String, DeserializeError<'a, R>> {
         let vec = self.read_vec()?;
-        String::from_utf8(vec).map_err(|e| ErrorKind::InvalidUtf8Encoding(e.utf8_error()).into())
+        String::from_utf8(vec)
+            .map_err(|e| DeserializeError::InvalidUtf8Encoding(e.utf8_error()).into())
     }
+    */
 }
 impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     for &'b mut Deserializer<'a, R, O>

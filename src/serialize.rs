@@ -52,7 +52,7 @@ pub fn serialize_size<T: serde::Serialize + ?Sized, O: Options>(
 }
 
 /// Any error that can be thrown while serializing a type
-pub enum SerializeError<W: CoreWrite> {
+pub enum SerializeError<W: CoreWrite + ?Sized> {
     /// Generic write error. See the inner `CoreWrite::Error` for more info
     Write(W::Error),
 

@@ -1,8 +1,5 @@
 use core::marker::PhantomData;
 
-#[cfg(feature = "alloc")]
-use alloc::vec::Vec;
-
 pub(crate) use self::endian::BincodeByteOrder;
 pub(crate) use self::int::IntEncoding;
 pub(crate) use self::internal::InternalOptions;
@@ -132,13 +129,6 @@ pub trait Options: InternalOptions + Sized {
         WithOtherTrailing::new(self)
     }
 
-    /// Serializes a serializable object into a `Vec` of bytes using this configuration
-    #[inline(always)]
-    #[cfg(feature = "alloc")]
-    fn serialize<S: ?Sized + serde::Serialize>(self, t: &S) -> Result<Vec<u8>> {
-        crate::serialize::serialize(t, self)
-    }
-
     /// Returns the size that an object would be if serialized using Bincode with this configuration
     #[inline(always)]
     fn serialized_size<T: ?Sized + serde::Serialize>(
@@ -191,8 +181,11 @@ pub trait Options: InternalOptions + Sized {
     /// If this returns an `Error`, `reader` may be in an invalid state.
     #[inline(always)]
     #[cfg(feature = "alloc")]
-    fn deserialize_from<R: Read, T: serde::de::DeserializeOwned>(self, reader: R) -> Result<T> {
-        deserialize_from(reader, self)
+    fn deserialize_from<'de, R: CoreRead<'de> + 'de, T: serde::de::DeserializeOwned>(
+        self,
+        reader: R,
+    ) -> Result<T, DeserializeError<'de, R>> {
+        crate::deserialize::deserialize(reader, self)
     }
 }
 

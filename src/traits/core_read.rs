@@ -1,3 +1,6 @@
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 /// A target that can be read from. This is similar to `std::io::Read`, but the std trait is not
 /// available in `#![no_std]` projects.
 ///
@@ -36,6 +39,16 @@ pub trait CoreRead<'a> {
     /// The returned slice MUST be exactly the size that is requested. The deserializer will
     /// return `Self::Error` when a differently sized slice is returned.
     fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error>;
+
+    /// Read an owned vec from this reader.
+    #[cfg(feature = "alloc")]
+    fn read_vec(&mut self, len: usize) -> Result<Vec<u8>, Self::Error> {
+        let mut vec = Vec::with_capacity(len);
+        for _ in 0..len {
+            vec.push(self.read()?);
+        }
+        Ok(vec)
+    }
 }
 
 impl<'a> CoreRead<'a> for &'a [u8] {

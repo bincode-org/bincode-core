@@ -35,3 +35,21 @@ impl CoreWrite for () {
         Ok(())
     }
 }
+
+#[cfg(feature = "alloc")]
+impl<'a> CoreWrite for &'a mut alloc::vec::Vec<u8> {
+    type Error = ();
+    fn write(&mut self, val: u8) -> Result<(), ()> {
+        self.push(val);
+        Ok(())
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl CoreWrite for alloc::vec::Vec<u8> {
+    type Error = ();
+    fn write(&mut self, val: u8) -> Result<(), ()> {
+        self.push(val);
+        Ok(())
+    }
+}
