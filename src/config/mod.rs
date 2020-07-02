@@ -1,5 +1,4 @@
 use core::marker::PhantomData;
-use serde;
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
