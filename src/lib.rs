@@ -17,7 +17,7 @@
 //! fixed-size backing array. The `&str` and `&[u8]` then simply point to a position in that
 //! buffer.
 
-#![cfg(feature = "alloc")]
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
 /// Contains helper structs to customize the way your structs are (de)serialized.
