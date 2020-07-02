@@ -18,22 +18,37 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
     writer: W,
     options: O,
 ) -> Result<(), SerializeError<W>> {
-    let mut serializer = Serializer::<W, O> { writer, options };
+    let mut serializer = Serializer::<W, O> {
+        writer,
+        _options: options,
+    };
     value.serialize(&mut serializer)
 }
 
-/// Return the size that serializing a given `T` type would need to be stored. This is an optimized version of:
-/// ```ignore
-/// let mut writer = ...;
-/// serialize(value, &mut writer, options);
-/// let len = writer.bytes_written();
+/// Return the size that serializing a given `T` type would need to be stored. This is an optimized version of getting the length of the writer after it's done writing.
+/// ```
+/// # use bincode_core::*;
+/// let mut buffer = [0u8; 1000];
+/// let mut writer = BufferWriter::new(&mut buffer);
+/// let options = DefaultOptions::new();
+///
+/// let value = "your data structure goes here";
+///
+/// serialize(value, &mut writer, options).unwrap();
+/// let written_len = writer.written_len();
+///
+/// let measured_len = serialize_size(value, options).unwrap();
+///
+/// assert_eq!(written_len, measured_len);
 /// ```
 /// But without actually writing to memory
-pub fn serialize_size<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
+pub fn serialize_size<T: serde::Serialize + ?Sized, O: Options>(
     value: &T,
     options: O,
-) -> Result<u64, SerializeError<W>> {
-    unimplemented!()
+) -> Result<u64, SerializeError<()>> {
+    let mut size_checker = crate::size_checker::SizeChecker { options, total: 0 };
+    value.serialize(&mut size_checker)?;
+    Ok(size_checker.total)
 }
 
 /// Any error that can be thrown while serializing a type
@@ -71,7 +86,7 @@ impl<W: CoreWrite> serde::ser::Error for SerializeError<W> {
 /// [CoreWrite] writer.
 pub struct Serializer<W: CoreWrite, O: Options> {
     writer: W,
-    options: O,
+    _options: O,
 }
 
 macro_rules! impl_serialize_literal {

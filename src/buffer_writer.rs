@@ -13,8 +13,8 @@ impl<'a> BufferWriter<'a> {
     }
 
     /// The bytes count written to the backing buffer.
-    pub fn written_len(&self) -> usize {
-        self.index
+    pub fn written_len(&self) -> u64 {
+        self.index as u64
     }
 
     /// A slice of the buffer that is in this writer. This is equivalent to getting a slice of the
@@ -22,10 +22,10 @@ impl<'a> BufferWriter<'a> {
     /// ```
     /// # let mut buffer: [u8; 0] = [];
     /// # let mut buffer_2: [u8; 0] = [];
-    /// # let mut writer = bincode_core::buffer_writer::BufferWriter::new(&mut buffer_2[..]);
+    /// # let mut writer = bincode_core::BufferWriter::new(&mut buffer_2[..]);
     ///
     /// // These two statements are equivalent
-    /// let buffer_slice = &buffer[..writer.written_len()];
+    /// let buffer_slice = &buffer[..writer.written_len() as usize];
     /// let writer_slice = writer.written_buffer();
     ///
     /// assert_eq!(buffer_slice, writer_slice);

@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate serde_derive;
 
-use bincode_core::buffer_writer::BufferWriter;
-use bincode_core::{config::DefaultOptions, deserialize::deserialize, serialize::serialize};
+use bincode_core::BufferWriter;
+use bincode_core::{deserialize, serialize, DefaultOptions};
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct TestStruct {

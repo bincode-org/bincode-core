@@ -7,6 +7,7 @@ pub trait SizeLimit {
     fn limit(&self) -> Option<u64>;
 }
 
+/// Reached an error regarding the size limit that was passed to the options.
 #[non_exhaustive]
 pub enum LimitError {
     /// Reached the limit of the given size

@@ -174,10 +174,6 @@ const U16_BYTE: u8 = 251;
 const U32_BYTE: u8 = 252;
 const U64_BYTE: u8 = 253;
 const U128_BYTE: u8 = 254;
-const DESERIALIZE_EXTENSION_POINT_ERR: &str = r#"
-Byte 255 is treated as an extension point; it should not be encoding anything.
-Do you have a mismatched bincode version or configuration?
-"#;
 
 impl VarintEncoding {
     fn varint_size(n: u64) -> u64 {
@@ -247,10 +243,8 @@ impl VarintEncoding {
             U16_BYTE => Ok(de.deserialize_literal_u16()? as u64),
             U32_BYTE => Ok(de.deserialize_literal_u32()? as u64),
             U64_BYTE => de.deserialize_literal_u64(),
-            U128_BYTE => Err(DeserializeError::Custom(
-                "Invalid value (u128 range): you may have a version or configuration disagreement?",
-            )),
-            _ => Err(DeserializeError::Custom(DESERIALIZE_EXTENSION_POINT_ERR)),
+            U128_BYTE => Err(DeserializeError::InvalidValueRange),
+            _ => Err(DeserializeError::ExtensionPoint),
         }
     }
 
@@ -318,7 +312,7 @@ impl VarintEncoding {
                 U32_BYTE => Ok(de.deserialize_literal_u32()? as u128),
                 U64_BYTE => Ok(de.deserialize_literal_u64()? as u128),
                 U128_BYTE => de.deserialize_literal_u128(),
-                _ => Err(DeserializeError::Custom(DESERIALIZE_EXTENSION_POINT_ERR)),
+                _ => Err(DeserializeError::ExtensionPoint),
             }
         }
     }

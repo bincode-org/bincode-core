@@ -26,3 +26,12 @@ pub trait CoreWrite {
         Ok(())
     }
 }
+
+// Added because there are situations where you want to be able to return a `SerializeError<()>`.
+// SerializeError<W> requires W: CoreWrite, because some variants require W::Error.
+impl CoreWrite for () {
+    type Error = ();
+    fn write(&mut self, _val: u8) -> Result<(), ()> {
+        Ok(())
+    }
+}

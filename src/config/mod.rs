@@ -142,10 +142,10 @@ pub trait Options: InternalOptions + Sized {
 
     /// Returns the size that an object would be if serialized using Bincode with this configuration
     #[inline(always)]
-    fn serialized_size<T: ?Sized + serde::Serialize, W: CoreWrite>(
+    fn serialized_size<T: ?Sized + serde::Serialize>(
         self,
         t: &T,
-    ) -> Result<u64, SerializeError<W>> {
+    ) -> Result<u64, SerializeError<()>> {
         crate::serialize::serialize_size(t, self)
     }
 

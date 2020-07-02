@@ -51,7 +51,9 @@ impl<'a> CoreRead<'a> for &'a [u8] {
     }
 }
 
+/// An error that is thrown when reading from a slice.
 #[derive(Debug)]
 pub enum SliceReadError {
+    /// Tried reading more bytes than the slice contains.
     EndOfSlice,
 }

@@ -17,8 +17,7 @@ use serde::{de::*, serde_if_integer128};
 /// ```
 /// # extern crate serde_derive;
 /// # use serde_derive::Deserialize;
-/// # use bincode_core::deserialize::deserialize;
-/// # use bincode_core::config::DefaultOptions;
+/// # use bincode_core::{deserialize, DefaultOptions};
 ///
 /// #[derive(Deserialize, PartialEq, Debug)]
 /// pub struct SomeStruct {
@@ -67,13 +66,18 @@ pub enum DeserializeError<'a, R: CoreRead<'a>> {
 
     /// Could not cast from type `from_type` to type `to_type`. Usually this means that the data is encoded with a different version or protocol.
     InvalidCast {
+        /// The base type that was being casted from
         from_type: &'static str,
+
+        /// The target type that was being casted to
         to_type: &'static str,
     },
 
-    /// Custom error value
-    #[deprecated]
-    Custom(&'static str),
+    /// Invalid value (u128 range): you may have a version or configuration disagreement?
+    InvalidValueRange,
+
+    /// Byte 255 is treated as an extension point; it should not be encoding anything. Do you have a mismatched bincode version or configuration?
+    ExtensionPoint,
 }
 
 impl<'a, R: CoreRead<'a>> From<str::Utf8Error> for DeserializeError<'a, R> {
@@ -102,7 +106,14 @@ impl<'a, R: CoreRead<'a>> core::fmt::Debug for DeserializeError<'a, R> {
             DeserializeError::InvalidCast { from_type, to_type } => {
                 write!(fmt, "Could not cast from {:?} to {:?}", from_type, to_type)
             }
-            DeserializeError::Custom(msg) => write!(fmt, "{}", msg),
+            DeserializeError::InvalidValueRange => write!(
+                fmt,
+                "Invalid value (u128 range): you may have a version or configuration disagreement?"
+            ),
+            DeserializeError::ExtensionPoint => write!(
+                fmt,
+                "Byte 255 is treated as an extension point; it should not be encoding anything. Do you have a mismatched bincode version or configuration?"
+            ),
         }
     }
 }

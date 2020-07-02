@@ -17,10 +17,17 @@
 //! fixed-size backing array. The `&str` and `&[u8]` then simply point to a position in that
 //! buffer.
 
-pub mod buffer_writer;
+/// Contains helper structs to customize the way your structs are (de)serialized.
 pub mod config;
-pub mod deserialize;
-pub mod serialize;
-pub mod traits;
 
-use self::traits::{CoreRead, CoreWrite};
+mod buffer_writer;
+mod deserialize;
+mod serialize;
+mod size_checker;
+mod traits;
+
+pub use self::buffer_writer::{BufferWriter, BufferWriterError};
+pub use self::config::DefaultOptions;
+pub use self::deserialize::{deserialize, DeserializeError};
+pub use self::serialize::{serialize, serialize_size, SerializeError};
+pub use self::traits::{CoreRead, CoreWrite};
