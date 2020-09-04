@@ -500,9 +500,31 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
         self,
         _name: &'static str,
         _variants: &'static [&'static str],
-        _visitor: V,
+        visitor: V,
     ) -> Result<V::Value, Self::Error> {
-        unimplemented!()
+        impl<'de, 'a, R: 'a, O> serde::de::EnumAccess<'de> for &'a mut Deserializer<'de, R, O>
+        where
+            R: CoreRead<'de>,
+            O: Options,
+        {
+            type Error = DeserializeError<'de, R>;
+            type Variant = Self;
+
+            fn variant_seed<V>(
+                self,
+                seed: V,
+            ) -> Result<(V::Value, Self::Variant), DeserializeError<'de, R>>
+            where
+                V: serde::de::DeserializeSeed<'de>,
+            {
+                let idx: u32 = O::IntEncoding::deserialize_u32(self)?;
+                let val: Result<_, DeserializeError<'de, R>> =
+                    seed.deserialize(idx.into_deserializer());
+                Ok((val?, self))
+            }
+        }
+
+        visitor.visit_enum(self)
     }
 
     /// Hint that the `Deserialize` type is expecting the name of a struct
@@ -521,6 +543,43 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
 
     fn is_human_readable(&self) -> bool {
         false
+    }
+}
+
+impl<'de, 'a, R, O> serde::de::VariantAccess<'de> for &'a mut Deserializer<'de, R, O>
+where
+    R: CoreRead<'de>,
+    O: Options,
+{
+    type Error = DeserializeError<'de, R>;
+
+    fn unit_variant(self) -> Result<(), DeserializeError<'de, R>> {
+        Ok(())
+    }
+
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, DeserializeError<'de, R>>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        serde::de::DeserializeSeed::deserialize(seed, self)
+    }
+
+    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, DeserializeError<'de, R>>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        serde::de::Deserializer::deserialize_tuple(self, len, visitor)
+    }
+
+    fn struct_variant<V>(
+        self,
+        fields: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, DeserializeError<'de, R>>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        serde::de::Deserializer::deserialize_tuple(self, fields.len(), visitor)
     }
 }
 
