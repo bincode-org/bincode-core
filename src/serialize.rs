@@ -115,6 +115,14 @@ impl<W: CoreWrite, O: Options> Serializer<W, O> {
     }
 }
 
+macro_rules! impl_serialize_int {
+    ($ser_method:ident($ty:ty) = $ser_int:ident()) => {
+        fn $ser_method(self, v: $ty) -> Result<Self::Ok, Self::Error> {
+            O::IntEncoding::$ser_int(self, v)
+        }
+    };
+}
+
 impl<'a, W: CoreWrite, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     type Ok = ();
     type Error = SerializeError<W>;
@@ -127,67 +135,28 @@ impl<'a, W: CoreWrite, O: Options> serde::Serializer for &'a mut Serializer<W, O
     type SerializeStructVariant = Compound<'a, W, O>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        self.writer.write(v as u8).map_err(SerializeError::Write)
+        self.serialize_byte(v as u8)
     }
 
     fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        self.writer.write(v as u8).map_err(SerializeError::Write)
+        self.serialize_byte(v as u8)
     }
 
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 2];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i16(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
-
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 4];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i32(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
-
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 8];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i64(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
-
-    serde_if_integer128! {
-        fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
-            let mut buf = [0u8; 16];
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_i128(&mut buf, v);
-            self.writer.write_all(&buf).map_err(SerializeError::Write)
-        }
-    }
+    impl_serialize_int! {serialize_u16(u16) = serialize_u16()}
+    impl_serialize_int! {serialize_u32(u32) = serialize_u32()}
+    impl_serialize_int! {serialize_u64(u64) = serialize_u64()}
 
     fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        self.writer.write(v).map_err(SerializeError::Write)
+        self.serialize_byte(v)
     }
 
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 2];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u16(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
-
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 4];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u32(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
-
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        let mut buf = [0u8; 8];
-        <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u64(&mut buf, v);
-        self.writer.write_all(&buf).map_err(SerializeError::Write)
-    }
+    impl_serialize_int! {serialize_i16(i16) = serialize_i16()}
+    impl_serialize_int! {serialize_i32(i32) = serialize_i32()}
+    impl_serialize_int! {serialize_i64(i64) = serialize_i64()}
 
     serde_if_integer128! {
-        fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
-            let mut buf = [0u8; 16];
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::write_u128(&mut buf, v);
-            self.writer.write_all(&buf).map_err(SerializeError::Write)
-        }
+        impl_serialize_int!{serialize_u128(u128) = serialize_u128()}
+        impl_serialize_int!{serialize_i128(i128) = serialize_i128()}
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
