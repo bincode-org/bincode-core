@@ -204,6 +204,19 @@ impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
     }
     */
 }
+
+macro_rules! impl_deserialize_int {
+    ($name:ident = $visitor_method:ident ($dser_method:ident)) => {
+        #[inline]
+        fn $name<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+        where
+            V: serde::de::Visitor<'a>,
+        {
+            visitor.$visitor_method(O::IntEncoding::$dser_method(self)?)
+        }
+    };
+}
+
 impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     for &'b mut Deserializer<'a, R, O>
 {
@@ -223,69 +236,23 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     }
 
     fn deserialize_i8<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let val = self.reader.read().map_err(DeserializeError::Read)?;
-        visitor.visit_i8(val as i8)
-    }
-
-    fn deserialize_i16<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(2).map_err(DeserializeError::Read)?;
-        visitor.visit_i16(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i16(&buffer),
-        )
-    }
-
-    fn deserialize_i32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_i32(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i32(&buffer),
-        )
-    }
-
-    fn deserialize_i64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_i64(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i64(&buffer),
-        )
-    }
-
-    serde_if_integer128! {
-        fn deserialize_i128<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-            let buffer = self.reader.read_range(16).map_err(DeserializeError::Read)?;
-            visitor.visit_i128(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_i128(&buffer))
-        }
+        visitor.visit_i8(self.deserialize_byte()? as i8)
     }
 
     fn deserialize_u8<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let val = self.reader.read().map_err(DeserializeError::Read)?;
-        visitor.visit_u8(val)
+        visitor.visit_u8(self.deserialize_byte()? as u8)
     }
 
-    fn deserialize_u16<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(2).map_err(DeserializeError::Read)?;
-        visitor.visit_u16(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u16(&buffer),
-        )
-    }
-
-    fn deserialize_u32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_u32(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u32(&buffer),
-        )
-    }
-
-    fn deserialize_u64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_u64(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u64(&buffer),
-        )
-    }
+    impl_deserialize_int!(deserialize_u16 = visit_u16(deserialize_u16));
+    impl_deserialize_int!(deserialize_u32 = visit_u32(deserialize_u32));
+    impl_deserialize_int!(deserialize_u64 = visit_u64(deserialize_u64));
+    impl_deserialize_int!(deserialize_i16 = visit_i16(deserialize_i16));
+    impl_deserialize_int!(deserialize_i32 = visit_i32(deserialize_i32));
+    impl_deserialize_int!(deserialize_i64 = visit_i64(deserialize_i64));
 
     serde_if_integer128! {
-        fn deserialize_u128<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-            let buffer = self.reader.read_range(16).map_err(DeserializeError::Read)?;
-            visitor.visit_u128(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_u128(&buffer))
-        }
+        impl_deserialize_int!(deserialize_u128 = visit_u128(deserialize_u128));
+        impl_deserialize_int!(deserialize_i128 = visit_i128(deserialize_i128));
     }
 
     fn deserialize_f32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
