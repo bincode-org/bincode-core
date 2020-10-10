@@ -154,9 +154,9 @@ macro_rules! impl_deserialize_literal {
         #[inline]
         pub(crate) fn $name(&mut self) -> Result<$ty, DeserializeError<'a, R>> {
             self.read_literal_type::<$ty>()?;
-            let buffer = self
-                .reader
-                .read_range(core::mem::size_of::<$ty>())
+            let mut buffer = [0u8; core::mem::size_of::<$ty>()];
+            self.reader
+                .fill(&mut buffer)
                 .map_err(DeserializeError::Read)?;
             Ok(<<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::$read(&buffer))
         }
@@ -166,7 +166,9 @@ macro_rules! impl_deserialize_literal {
 impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
     pub(crate) fn deserialize_byte(&mut self) -> Result<u8, DeserializeError<'a, R>> {
         self.read_literal_type::<u8>()?;
-        self.reader.read().map_err(DeserializeError::Read)
+        let mut buf = [0u8; 1];
+        self.reader.fill(&mut buf).map_err(DeserializeError::Read)?;
+        Ok(buf[0])
     }
 
     impl_deserialize_literal! { deserialize_literal_u16 : u16 = read_u16() }
@@ -256,24 +258,34 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     }
 
     fn deserialize_f32<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(4).map_err(DeserializeError::Read)?;
-        visitor.visit_f32(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f32(&buffer),
-        )
+        let mut buffer = [0u8; 4];
+        self.reader
+            .fill(&mut buffer)
+            .map_err(DeserializeError::Read)?;
+        let float =
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f32(&buffer);
+
+        visitor.visit_f32(float)
     }
 
     fn deserialize_f64<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let buffer = self.reader.read_range(8).map_err(DeserializeError::Read)?;
-        visitor.visit_f64(
-            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f64(&buffer),
-        )
+        let mut buffer = [0u8; 8];
+        self.reader
+            .fill(&mut buffer)
+            .map_err(DeserializeError::Read)?;
+        let float =
+            <<O::Endian as BincodeByteOrder>::Endian as byteorder::ByteOrder>::read_f64(&buffer);
+
+        visitor.visit_f64(float)
     }
 
     fn deserialize_char<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         let mut buf = [0u8; 4];
 
         // Look at the first byte to see how many bytes must be read
-        buf[0] = self.reader.read().map_err(DeserializeError::Read)?;
+        self.reader
+            .fill(&mut buf[..1])
+            .map_err(DeserializeError::Read)?;
         let width = utf8_char_width(buf[0]);
         if width == 1 {
             return visitor.visit_char(buf[0] as char);
@@ -282,9 +294,9 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
             return Err(DeserializeError::InvalidCharEncoding);
         }
 
-        for byte in buf.iter_mut().take(width).skip(1) {
-            *byte = self.reader.read().map_err(DeserializeError::Read)?;
-        }
+        self.reader
+            .fill(&mut buf[1..width])
+            .map_err(DeserializeError::Read)?;
 
         let res = str::from_utf8(&buf[..width])?
             .chars()
@@ -295,34 +307,60 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
 
     fn deserialize_str<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
         let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
-        let buf = self
-            .reader
-            .read_range(length)
-            .map_err(DeserializeError::Read)?;
-        let res = str::from_utf8(buf)?;
-
-        visitor.visit_borrowed_str(res)
+        self.reader
+            .forward_str(length, visitor)
+            .map_err(DeserializeError::Read)
     }
 
+    #[cfg(not(feature = "alloc"))]
     fn deserialize_string<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_bytes<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+    #[cfg(feature = "alloc")]
+    fn deserialize_string<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        use alloc::string::String;
+        use alloc::vec;
+
         let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
-        let buf = self
-            .reader
-            .read_range(length)
+        let mut buffer = vec![0; length];
+        self.reader
+            .fill(&mut buffer)
             .map_err(DeserializeError::Read)?;
-        visitor.visit_borrowed_bytes(buf)
+
+        visitor.visit_string(
+            String::from_utf8(buffer)
+                .map_err(|e| DeserializeError::InvalidUtf8Encoding(e.utf8_error()))?,
+        )
     }
 
+    fn deserialize_bytes<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
+        self.reader
+            .forward_bytes(length, visitor)
+            .map_err(DeserializeError::Read)
+    }
+
+    #[cfg(not(feature = "alloc"))]
     fn deserialize_byte_buf<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
         self.deserialize_bytes(visitor)
     }
 
+    #[cfg(feature = "alloc")]
+    fn deserialize_byte_buf<V: Visitor<'a>>(mut self, visitor: V) -> Result<V::Value, Self::Error> {
+        use alloc::vec;
+
+        let length = O::IntEncoding::deserialize_len(&mut self)?; // .map_err(DeserializeError::Read)?;
+        let mut buffer = vec![0; length];
+        self.reader
+            .fill(&mut buffer)
+            .map_err(DeserializeError::Read)?;
+
+        visitor.visit_byte_buf(buffer)
+    }
+
     fn deserialize_option<V: Visitor<'a>>(self, visitor: V) -> Result<V::Value, Self::Error> {
-        let val = self.reader.read().map_err(DeserializeError::Read)?;
+        let val: u8 = serde::de::Deserialize::deserialize(&mut *self)?;
         if val == 0 {
             visitor.visit_none()
         } else if val == 1 {
