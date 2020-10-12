@@ -56,7 +56,8 @@ macro_rules! simple_test {
             assert_eq!($size, writer.written_len());
 
             let deserialized: $prim =
-                deserialize_bytes(&buffer[..], DefaultOptions::new().with_fixint_encoding()).unwrap();
+                deserialize_bytes(&buffer[..], DefaultOptions::new().with_fixint_encoding())
+                    .unwrap();
             assert_eq!(s, deserialized);
         }
     };
