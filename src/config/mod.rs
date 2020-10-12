@@ -168,7 +168,7 @@ pub trait Options: InternalOptions + Sized {
         self,
         reader: R,
         place: &'a mut T,
-    ) -> Result<(), DeserializeError<<R as CoreRead>::Error>>
+    ) -> Result<(), DeserializeError<<R as CoreRead<'a>>::Error>>
     where
         R: CoreRead<'a> + 'a,
         T: serde::de::Deserialize<'a>,
@@ -185,7 +185,7 @@ pub trait Options: InternalOptions + Sized {
     fn deserialize_from<'de, R: CoreRead<'de> + 'de, T: serde::de::DeserializeOwned>(
         self,
         reader: R,
-    ) -> Result<T, DeserializeError<<R as CoreRead>::Error>> {
+    ) -> Result<T, DeserializeError<<R as CoreRead<'de>>::Error>> {
         crate::deserialize::deserialize(reader, self)
     }
 }
