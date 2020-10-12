@@ -4,6 +4,8 @@ use core::str::Utf8Error;
 use core::{marker::PhantomData, str};
 use serde::{de::*, serde_if_integer128};
 
+pub use crate::traits::{CoreReadBytes, SliceReadError};
+
 // #[cfg(feature = "alloc")]
 // use alloc::{string::String, vec::Vec};
 
@@ -17,11 +19,33 @@ use serde::{de::*, serde_if_integer128};
 /// or
 ///
 /// `let val = deserialize::<Type, _, byteorder::NetworkEndian>(&reader)?;`
+pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: Options>(
+    reader: R,
+    options: O,
+) -> Result<T, DeserializeError<<R as CoreRead<'a>>::Error>> {
+    let mut deserializer = Deserializer {
+        reader,
+        options,
+        _lifetime: PhantomData,
+    };
+    T::deserialize(&mut deserializer)
+}
+
+/// Deserialize a given object from the given `&[u8]` slice.
+///
+/// Rust will detect the first two generic arguments automatically. The third generic argument
+/// must be a valid `byteorder::ByteOrder` type. Normally this can be implemented like this:
+///
+/// `let val: Type = deserialize::<_, _, byteorder::NetworkEndian>(&reader)?;`
+///
+/// or
+///
+/// `let val = deserialize::<Type, _, byteorder::NetworkEndian>(&reader)?;`
 ///
 /// ```
 /// # extern crate serde_derive;
 /// # use serde_derive::Deserialize;
-/// # use bincode_core::{deserialize, DefaultOptions};
+/// # use bincode_core::{deserialize_bytes, DefaultOptions};
 ///
 /// #[derive(Deserialize, PartialEq, Debug)]
 /// pub struct SomeStruct {
@@ -33,15 +57,15 @@ use serde::{de::*, serde_if_integer128};
 ///     6, // b
 /// ];
 /// let options = DefaultOptions::new();
-/// let val: SomeStruct = deserialize(&buffer[..], options).unwrap();
+/// let val: SomeStruct = deserialize_bytes(&buffer[..], options).unwrap();
 /// assert_eq!(val, SomeStruct { a: 3, b: 6 });
 /// ```
-pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: Options>(
-    reader: R,
+pub fn deserialize_bytes<'a, T: Deserialize<'a>, O: Options>(
+    bytes: &'a [u8],
     options: O,
-) -> Result<T, DeserializeError<<R as CoreRead<'a>>::Error>> {
+) -> Result<T, DeserializeError<SliceReadError>> {
     let mut deserializer = Deserializer {
-        reader,
+        reader: CoreReadBytes(bytes),
         options,
         _lifetime: PhantomData,
     };
@@ -522,6 +546,7 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
             type Error = DeserializeError<<R as CoreRead<'de>>::Error>;
             type Variant = Self;
 
+            #[allow(clippy::type_complexity)]
             fn variant_seed<V>(
                 self,
                 seed: V,

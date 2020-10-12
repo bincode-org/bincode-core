@@ -5,7 +5,7 @@ extern crate serde_derive;
 extern crate alloc;
 
 use bincode_core::BufferWriter;
-use bincode_core::{deserialize, serialize, DefaultOptions};
+use bincode_core::{deserialize_bytes, serialize, DefaultOptions};
 use std::marker::PhantomData;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -80,7 +80,7 @@ fn simple_struct() {
     // [u8; 3]      3 (fixed array so no length)
     assert_eq!(1 + 1 + 1 + 1 + 1 + 1 + 1 + 3, writer.written_len());
 
-    let deserialized: TestStruct = deserialize(&buffer[..], options).unwrap();
+    let deserialized: TestStruct = deserialize_bytes(&buffer[..], options).unwrap();
     assert_eq!(s, deserialized);
 }
 
@@ -101,7 +101,7 @@ fn simple_tuple() {
     // &str         1 (len) + 4 (str content)
     assert_eq!(1 + 1 + 1 + 4 + 1 + 4, writer.written_len());
 
-    let deserialized: (u16, u32, &[u8], &str) = deserialize(&buffer[..], options).unwrap();
+    let deserialized: (u16, u32, &[u8], &str) = deserialize_bytes(&buffer[..], options).unwrap();
     assert_eq!(s, deserialized);
 }
 
@@ -118,7 +118,7 @@ macro_rules! simple_test {
 
             assert_eq!($size, writer.written_len());
 
-            let deserialized: $prim = deserialize(&buffer[..], options).unwrap();
+            let deserialized: $prim = deserialize_bytes(&buffer[..], options).unwrap();
             assert_eq!(s, deserialized);
         }
     };

@@ -3,7 +3,7 @@ extern crate serde_derive;
 
 use bincode_core::config::Options;
 use bincode_core::BufferWriter;
-use bincode_core::{deserialize, serialize, DefaultOptions};
+use bincode_core::{deserialize_bytes, serialize, DefaultOptions};
 use std::marker::PhantomData;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
@@ -56,7 +56,7 @@ macro_rules! simple_test {
             assert_eq!($size, writer.written_len());
 
             let deserialized: $prim =
-                deserialize(&buffer[..], DefaultOptions::new().with_fixint_encoding()).unwrap();
+                deserialize_bytes(&buffer[..], DefaultOptions::new().with_fixint_encoding()).unwrap();
             assert_eq!(s, deserialized);
         }
     };

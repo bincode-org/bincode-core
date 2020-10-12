@@ -31,6 +31,6 @@ mod traits;
 
 pub use self::buffer_writer::{BufferWriter, BufferWriterError};
 pub use self::config::DefaultOptions;
-pub use self::deserialize::{deserialize, DeserializeError};
+pub use self::deserialize::{deserialize, deserialize_bytes, DeserializeError};
 pub use self::serialize::{serialize, serialize_size, SerializeError};
 pub use self::traits::{CoreRead, CoreWrite};
