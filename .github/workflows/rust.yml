@@ -74,3 +74,30 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
+
+  check_feature_combinations:
+    name: Check feature combinations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --features "embedded-hal"
+
+      - name: Run cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --features "alloc,embedded-hal"
+

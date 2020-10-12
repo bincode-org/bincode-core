@@ -39,7 +39,7 @@ use serde::{de::*, serde_if_integer128};
 pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: Options>(
     reader: R,
     options: O,
-) -> Result<T, DeserializeError<'a, R>> {
+) -> Result<T, DeserializeError<<R as CoreRead<'a>>::Error>> {
     let mut deserializer = Deserializer {
         reader,
         options,
@@ -49,9 +49,9 @@ pub fn deserialize<'a, T: Deserialize<'a>, R: CoreRead<'a> + 'a, O: Options>(
 }
 
 /// Errors that can occur while deserializing
-pub enum DeserializeError<'a, R: CoreRead<'a>> {
+pub enum DeserializeError<ERR: core::fmt::Debug> {
     /// Failed to read from the provided `CoreRead`. The inner exception is given.
-    Read(R::Error),
+    Read(ERR),
 
     /// Invalid bool value. Only `0` and `1` are valid values.
     InvalidBoolValue(u8),
@@ -87,13 +87,13 @@ pub enum DeserializeError<'a, R: CoreRead<'a>> {
     ExtensionPoint,
 }
 
-impl<'a, R: CoreRead<'a>> From<str::Utf8Error> for DeserializeError<'a, R> {
+impl<ERR: core::fmt::Debug> From<str::Utf8Error> for DeserializeError<ERR> {
     fn from(err: str::Utf8Error) -> Self {
         Self::Utf8(err)
     }
 }
 
-impl<'a, R: CoreRead<'a>> core::fmt::Debug for DeserializeError<'a, R> {
+impl<'a, ERR: core::fmt::Debug> core::fmt::Debug for DeserializeError<ERR> {
     fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             DeserializeError::Read(e) => write!(fmt, "{:?}", e),
@@ -129,13 +129,13 @@ impl<'a, R: CoreRead<'a>> core::fmt::Debug for DeserializeError<'a, R> {
     }
 }
 
-impl<'a, R: CoreRead<'a>> core::fmt::Display for DeserializeError<'a, R> {
+impl<ERR: core::fmt::Debug> core::fmt::Display for DeserializeError<ERR> {
     fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(fmt, "{:?}", self)
     }
 }
 
-impl<'a, R: CoreRead<'a>> Error for DeserializeError<'a, R> {
+impl<ERR: core::fmt::Debug> Error for DeserializeError<ERR> {
     fn custom<T: core::fmt::Display>(_cause: T) -> Self {
         panic!("Custom error thrown: {}", _cause);
     }
@@ -152,7 +152,9 @@ pub struct Deserializer<'a, R: CoreRead<'a> + 'a, O: Options> {
 macro_rules! impl_deserialize_literal {
     ($name:ident : $ty:ty = $read:ident()) => {
         #[inline]
-        pub(crate) fn $name(&mut self) -> Result<$ty, DeserializeError<'a, R>> {
+        pub(crate) fn $name(
+            &mut self,
+        ) -> Result<$ty, DeserializeError<<R as CoreRead<'a>>::Error>> {
             self.read_literal_type::<$ty>()?;
             let mut buffer = [0u8; core::mem::size_of::<$ty>()];
             self.reader
@@ -164,7 +166,9 @@ macro_rules! impl_deserialize_literal {
 }
 
 impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
-    pub(crate) fn deserialize_byte(&mut self) -> Result<u8, DeserializeError<'a, R>> {
+    pub(crate) fn deserialize_byte(
+        &mut self,
+    ) -> Result<u8, DeserializeError<<R as CoreRead<'a>>::Error>> {
         self.read_literal_type::<u8>()?;
         let mut buf = [0u8; 1];
         self.reader.fill(&mut buf).map_err(DeserializeError::Read)?;
@@ -179,27 +183,30 @@ impl<'a, R: CoreRead<'a> + 'a, O: Options> Deserializer<'a, R, O> {
         impl_deserialize_literal! { deserialize_literal_u128 : u128 = read_u128() }
     }
 
-    fn read_bytes(&mut self, count: u64) -> Result<(), DeserializeError<'a, R>> {
+    fn read_bytes(
+        &mut self,
+        count: u64,
+    ) -> Result<(), DeserializeError<<R as CoreRead<'a>>::Error>> {
         self.options
             .limit()
             .add(count)
             .map_err(DeserializeError::LimitError)
     }
 
-    fn read_literal_type<T>(&mut self) -> Result<(), DeserializeError<'a, R>> {
+    fn read_literal_type<T>(&mut self) -> Result<(), DeserializeError<<R as CoreRead<'a>>::Error>> {
         self.read_bytes(core::mem::size_of::<T>() as u64)
     }
 
     /*
     #[cfg(feature = "alloc")]
-    fn read_vec(&mut self) -> Result<Vec<u8>, DeserializeError<'a, R>> {
+    fn read_vec(&mut self) -> Result<Vec<u8>, DeserializeError<<R as CoreRead<'a>>::Error>> {
         let len = O::IntEncoding::deserialize_len(self)?;
         self.read_bytes(len as u64)?;
         self.reader.read_vec(len).map_err(DeserializeError::Read)
     }
 
     #[cfg(feature = "alloc")]
-    fn read_string(&mut self) -> Result<String, DeserializeError<'a, R>> {
+    fn read_string(&mut self) -> Result<String, DeserializeError<<R as CoreRead<'a>>::Error>> {
         let vec = self.read_vec()?;
         String::from_utf8(vec)
             .map_err(|e| DeserializeError::InvalidUtf8Encoding(e.utf8_error()).into())
@@ -222,7 +229,7 @@ macro_rules! impl_deserialize_int {
 impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
     for &'b mut Deserializer<'a, R, O>
 {
-    type Error = DeserializeError<'a, R>;
+    type Error = DeserializeError<<R as CoreRead<'a>>::Error>;
 
     fn deserialize_any<V: Visitor<'a>>(self, _visitor: V) -> Result<V::Value, Self::Error> {
         panic!("Deserialize any not supported")
@@ -406,7 +413,7 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
         }
 
         impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::de::SeqAccess<'a> for Access<'a, 'b, R, O> {
-            type Error = DeserializeError<'a, R>;
+            type Error = DeserializeError<<R as CoreRead<'a>>::Error>;
 
             fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
             where
@@ -451,7 +458,7 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
         }
 
         impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::de::MapAccess<'a> for Access<'a, 'b, R, O> {
-            type Error = DeserializeError<'a, R>;
+            type Error = DeserializeError<<R as CoreRead<'a>>::Error>;
 
             fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
             where
@@ -512,18 +519,18 @@ impl<'a, 'b, R: CoreRead<'a> + 'a, O: Options> serde::Deserializer<'a>
             R: CoreRead<'de>,
             O: Options,
         {
-            type Error = DeserializeError<'de, R>;
+            type Error = DeserializeError<<R as CoreRead<'de>>::Error>;
             type Variant = Self;
 
             fn variant_seed<V>(
                 self,
                 seed: V,
-            ) -> Result<(V::Value, Self::Variant), DeserializeError<'de, R>>
+            ) -> Result<(V::Value, Self::Variant), DeserializeError<<R as CoreRead<'de>>::Error>>
             where
                 V: serde::de::DeserializeSeed<'de>,
             {
                 let idx: u32 = O::IntEncoding::deserialize_u32(self)?;
-                let val: Result<_, DeserializeError<'de, R>> =
+                let val: Result<_, DeserializeError<<R as CoreRead<'de>>::Error>> =
                     seed.deserialize(idx.into_deserializer());
                 Ok((val?, self))
             }
@@ -556,20 +563,27 @@ where
     R: CoreRead<'de>,
     O: Options,
 {
-    type Error = DeserializeError<'de, R>;
+    type Error = DeserializeError<<R as CoreRead<'de>>::Error>;
 
-    fn unit_variant(self) -> Result<(), DeserializeError<'de, R>> {
+    fn unit_variant(self) -> Result<(), DeserializeError<<R as CoreRead<'de>>::Error>> {
         Ok(())
     }
 
-    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, DeserializeError<'de, R>>
+    fn newtype_variant_seed<T>(
+        self,
+        seed: T,
+    ) -> Result<T::Value, DeserializeError<<R as CoreRead<'de>>::Error>>
     where
         T: serde::de::DeserializeSeed<'de>,
     {
         serde::de::DeserializeSeed::deserialize(seed, self)
     }
 
-    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, DeserializeError<'de, R>>
+    fn tuple_variant<V>(
+        self,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value, DeserializeError<<R as CoreRead<'de>>::Error>>
     where
         V: serde::de::Visitor<'de>,
     {
@@ -580,7 +594,7 @@ where
         self,
         fields: &'static [&'static str],
         visitor: V,
-    ) -> Result<V::Value, DeserializeError<'de, R>>
+    ) -> Result<V::Value, DeserializeError<<R as CoreRead<'de>>::Error>>
     where
         V: serde::de::Visitor<'de>,
     {

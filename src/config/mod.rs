@@ -10,6 +10,7 @@ pub use self::endian::{BigEndian, LittleEndian, NativeEndian};
 pub use self::int::{FixintEncoding, VarintEncoding};
 pub use self::limit::{Bounded, Infinite, LimitError};
 pub use self::trailing::{AllowTrailing, RejectTrailing};
+pub use crate::traits::{CoreReadBytes, SliceReadError};
 use crate::{
     deserialize::DeserializeError,
     serialize::SerializeError,
@@ -147,17 +148,17 @@ pub trait Options: InternalOptions + Sized {
         self,
         w: W,
         t: &T,
-    ) -> Result<(), SerializeError<W>> {
+    ) -> Result<(), SerializeError<<W as CoreWrite>::Error>> {
         crate::serialize::serialize(t, w, self)
     }
 
     /// Deserializes a slice of bytes into an instance of `T` using this configuration
     #[inline(always)]
-    fn deserialize<'a, T: serde::Deserialize<'a>>(
+    fn deserialize_bytes<'a, T: serde::Deserialize<'a>>(
         self,
         bytes: &'a [u8],
-    ) -> Result<T, DeserializeError<'a, &'a [u8]>> {
-        crate::deserialize::deserialize(bytes, self)
+    ) -> Result<T, DeserializeError<SliceReadError>> {
+        crate::deserialize::deserialize(CoreReadBytes(bytes), self)
     }
 
     /// TODO: document
@@ -166,8 +167,8 @@ pub trait Options: InternalOptions + Sized {
     fn deserialize_in_place<'a, R, T>(
         self,
         reader: R,
-        place: &mut T,
-    ) -> Result<(), DeserializeError<'a, R>>
+        place: &'a mut T,
+    ) -> Result<(), DeserializeError<<R as CoreRead>::Error>>
     where
         R: CoreRead<'a> + 'a,
         T: serde::de::Deserialize<'a>,
@@ -184,7 +185,7 @@ pub trait Options: InternalOptions + Sized {
     fn deserialize_from<'de, R: CoreRead<'de> + 'de, T: serde::de::DeserializeOwned>(
         self,
         reader: R,
-    ) -> Result<T, DeserializeError<'de, R>> {
+    ) -> Result<T, DeserializeError<<R as CoreRead>::Error>> {
         crate::deserialize::deserialize(reader, self)
     }
 }

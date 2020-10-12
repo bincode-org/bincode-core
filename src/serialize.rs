@@ -17,7 +17,7 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
     value: &T,
     writer: W,
     options: O,
-) -> Result<(), SerializeError<W>> {
+) -> Result<(), SerializeError<<W as CoreWrite>::Error>> {
     let mut serializer = Serializer::<W, O> {
         writer,
         _options: options,
@@ -52,15 +52,15 @@ pub fn serialize_size<T: serde::Serialize + ?Sized, O: Options>(
 }
 
 /// Any error that can be thrown while serializing a type
-pub enum SerializeError<W: CoreWrite + ?Sized> {
+pub enum SerializeError<Error> {
     /// Generic write error. See the inner `CoreWrite::Error` for more info
-    Write(W::Error),
+    Write(Error),
 
     /// A sequence (e.g. `&str` or `&[u8]`) was requested to serialize, but it has no length.
     SequenceMustHaveLength,
 }
 
-impl<W: CoreWrite> core::fmt::Debug for SerializeError<W> {
+impl<ERR: core::fmt::Debug> core::fmt::Debug for SerializeError<ERR> {
     fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             SerializeError::Write(w) => write!(fmt, "Write error {:?}", w),
@@ -69,13 +69,13 @@ impl<W: CoreWrite> core::fmt::Debug for SerializeError<W> {
     }
 }
 
-impl<W: CoreWrite> core::fmt::Display for SerializeError<W> {
+impl<ERR: core::fmt::Debug> core::fmt::Display for SerializeError<ERR> {
     fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
         core::fmt::Debug::fmt(self, fmt)
     }
 }
 
-impl<W: CoreWrite> serde::ser::Error for SerializeError<W> {
+impl<ERR: core::fmt::Debug> serde::ser::Error for SerializeError<ERR> {
     fn custom<T: core::fmt::Display>(_cause: T) -> Self {
         // Custom errors not supported
         panic!("Custom error: {}", _cause);
@@ -91,7 +91,10 @@ pub struct Serializer<W: CoreWrite, O: Options> {
 
 macro_rules! impl_serialize_literal {
     ($ser_method:ident($ty:ty) = $write:ident()) => {
-        pub(crate) fn $ser_method(&mut self, v: $ty) -> Result<(), SerializeError<W>> {
+        pub(crate) fn $ser_method(
+            &mut self,
+            v: $ty,
+        ) -> Result<(), SerializeError<<W as CoreWrite>::Error>> {
             const LEN: usize = core::mem::size_of::<$ty>();
 
             let mut buf = [0u8; LEN];
@@ -102,7 +105,10 @@ macro_rules! impl_serialize_literal {
 }
 
 impl<W: CoreWrite, O: Options> Serializer<W, O> {
-    pub(crate) fn serialize_byte(&mut self, v: u8) -> Result<(), SerializeError<W>> {
+    pub(crate) fn serialize_byte(
+        &mut self,
+        v: u8,
+    ) -> Result<(), SerializeError<<W as CoreWrite>::Error>> {
         self.writer.write(v).map_err(SerializeError::Write)
     }
 
@@ -125,7 +131,7 @@ macro_rules! impl_serialize_int {
 
 impl<'a, W: CoreWrite, O: Options> serde::Serializer for &'a mut Serializer<W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
     type SerializeSeq = Compound<'a, W, O>;
     type SerializeTuple = Compound<'a, W, O>;
     type SerializeTupleStruct = Compound<'a, W, O>;
@@ -314,7 +320,7 @@ pub struct Compound<'a, W: CoreWrite, O: Options> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeSeq for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -332,7 +338,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeSeq for Compound<'a, W, O> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeTuple for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -350,7 +356,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeTuple for Compound<'a, W, O> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeTupleStruct for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -368,7 +374,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeTupleStruct for Compound<'a, W, O> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeTupleVariant for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
@@ -386,7 +392,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeTupleVariant for Compound<'a, W, O> 
 
 impl<'a, W: CoreWrite, O: Options> SerializeMap for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_key<K: ?Sized>(&mut self, value: &K) -> Result<(), Self::Error>
@@ -412,7 +418,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeMap for Compound<'a, W, O> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeStruct for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     #[inline]
     fn serialize_field<T: ?Sized>(
@@ -434,7 +440,7 @@ impl<'a, W: CoreWrite, O: Options> SerializeStruct for Compound<'a, W, O> {
 
 impl<'a, W: CoreWrite, O: Options> SerializeStructVariant for Compound<'a, W, O> {
     type Ok = ();
-    type Error = SerializeError<W>;
+    type Error = SerializeError<<W as CoreWrite>::Error>;
 
     fn serialize_field<T: ?Sized + Serialize>(
         &mut self,

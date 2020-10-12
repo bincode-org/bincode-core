@@ -43,15 +43,21 @@ pub trait CoreRead<'a> {
         V: serde::de::Visitor<'a>;
 }
 
-impl<'a> CoreRead<'a> for &'a [u8] {
+/// Helper struct that implements [CoreRead] for byte slices.
+///
+/// Implementing of CoreRead for all slices won't work, because CoreRead can
+// also be auto-implemented for certain traits, e.g. `embedded-hal::serial::Read`
+pub struct CoreReadBytes<'a>(pub(crate) &'a [u8]);
+
+impl<'a> CoreRead<'a> for CoreReadBytes<'a> {
     type Error = SliceReadError;
 
     fn fill(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error> {
-        if buffer.len() > self.len() {
+        if buffer.len() > self.0.len() {
             return Err(SliceReadError::EndOfSlice);
         }
-        buffer.copy_from_slice(&self[..buffer.len()]);
-        *self = &self[buffer.len()..];
+        buffer.copy_from_slice(&self.0[..buffer.len()]);
+        self.0 = &self.0[buffer.len()..];
         Ok(())
     }
 
@@ -59,11 +65,11 @@ impl<'a> CoreRead<'a> for &'a [u8] {
     where
         V: serde::de::Visitor<'a>,
     {
-        if len > self.len() {
+        if len > self.0.len() {
             return Err(SliceReadError::EndOfSlice);
         }
-        let result = &self[..len];
-        *self = &self[len..];
+        let result = &self.0[..len];
+        self.0 = &self.0[len..];
 
         visitor.visit_borrowed_bytes(result)
     }
@@ -72,11 +78,11 @@ impl<'a> CoreRead<'a> for &'a [u8] {
     where
         V: serde::de::Visitor<'a>,
     {
-        if len > self.len() {
+        if len > self.0.len() {
             return Err(SliceReadError::EndOfSlice);
         }
-        let result = &self[..len];
-        *self = &self[len..];
+        let result = &self.0[..len];
+        self.0 = &self.0[len..];
 
         let string = match str::from_utf8(result) {
             Ok(s) => s,
@@ -92,6 +98,8 @@ impl<'a> CoreRead<'a> for &'a [u8] {
 pub enum SliceReadError {
     /// Tried reading more bytes than the slice contains.
     EndOfSlice,
+
+    /// Tried to deserialize a `&str` but this contained invalid UTF8 characters.
     InvalidUtf8,
 }
 
