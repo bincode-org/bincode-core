@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 use bincode_core::BufferWriter;
 use bincode_core::{deserialize, serialize, DefaultOptions};
 use std::marker::PhantomData;
@@ -142,7 +145,7 @@ simple_test!(test_unit(()), val: (), size: 0);
 simple_test!(test_phantom_data(PhantomData<()>), val: PhantomData, size: 0);
 simple_test!(test_unit_struct(UnitStruct), val: UnitStruct, size: 0);
 // String has length (1 byte) + content (4 bytes)
-simple_test!(test_string(&str), val: "Test", size: 5);
+simple_test!(test_str(&str), val: "Test", size: 5);
 // Slice has length (1 byte) + content (1 byte)
 simple_test!(test_slice(&[u8]), val: &[1], size: 2);
 // Option type (1 byte) + content (1 byte)
@@ -165,3 +168,9 @@ simple_test!(test_tuple_struct(TupleStruct), val: TupleStruct(1, -1), size: 2);
 simple_test!(test_simple_struct(SimpleStruct), val: SimpleStruct{ a: 1 }, size: 1);
 // Complex struct - a (1 byte) + b: (1 byte) + c: (1 byte + 1 byte)
 simple_test!(test_complex_struct(ComplexStruct), val: ComplexStruct{ a: SimpleStruct { a: 1 }, b: SimpleEnum::A, c: ComplexEnum::A(1) }, size: 4);
+
+#[cfg(feature = "alloc")]
+simple_test!(test_vec(alloc::vec::Vec<u8>), val: alloc::vec![3u8; 1], size: 2);
+
+#[cfg(feature = "alloc")]
+simple_test!(test_string(alloc::string::String), val: "Test".to_string(), size: 5);

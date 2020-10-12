@@ -1,5 +1,4 @@
-#[cfg(feature = "alloc")]
-use alloc::vec::Vec;
+use core::str;
 
 /// A target that can be read from. This is similar to `std::io::Read`, but the std trait is not
 /// available in `#![no_std]` projects.
@@ -18,49 +17,73 @@ pub trait CoreRead<'a> {
     /// The error that this reader can encounter
     type Error: core::fmt::Debug;
 
-    /// Read a single byte from the current buffer. This is auto-implemented to read a &[u8; 1]
-    /// from [read_range] and return the first value.
-    ///
-    /// This method can be overwritten to allow for more efficient implementations.
-    ///
-    /// Unlike [read_range], The value returned from this method does not need to be stored in
-    /// a persistent buffer. Implementors of this function are free to discard the data that is
-    /// returned from this function.
-    fn read(&mut self) -> Result<u8, Self::Error> {
-        let buff = self.read_range(1)?;
-        Ok(buff[0])
-    }
+    /// Fills the given buffer from the reader.
+    /// The input buffer MUST be completely filled. If the reader reaches end-of-file before filling the
+    /// buffer an error MUST be returned.
+    fn fill(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error>;
 
-    /// Read a byte slice from this reader.
+    /// Forward a string slice from the reader on to the given visitor.
     ///
-    /// Because deserialization is done in-place, he value returned MUST be a reference to a
-    /// persistent buffer as the returned value can be used for e.g. `&str` and `&[u8]`.
+    /// If allocations are not available on the system, the bytes forwarded MUST be a reference to a
+    /// persistent buffer and forwarded on to `visitor.visit_borrowed_str`.
     ///
-    /// The returned slice MUST be exactly the size that is requested. The deserializer will
-    /// return `Self::Error` when a differently sized slice is returned.
-    fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error>;
+    /// The forwarded slice MUST be exactly the size that is requested.
+    fn forward_str<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'a>;
 
-    /// Read an owned vec from this reader.
-    #[cfg(feature = "alloc")]
-    fn read_vec(&mut self, len: usize) -> Result<Vec<u8>, Self::Error> {
-        let mut vec = Vec::with_capacity(len);
-        for _ in 0..len {
-            vec.push(self.read()?);
-        }
-        Ok(vec)
-    }
+    /// Forward a byte slice from the reader on to the given visitor.
+    ///
+    /// If allocations are not available on the system, the bytes forwarded MUST be a reference to a
+    /// persistent buffer and forwarded on to `visitor.visit_borrowed_bytes`.
+    ///
+    /// The forwarded slice MUST be exactly the size that is requested.
+    fn forward_bytes<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'a>;
 }
 
 impl<'a> CoreRead<'a> for &'a [u8] {
     type Error = SliceReadError;
 
-    fn read_range(&mut self, len: usize) -> Result<&'a [u8], Self::Error> {
+    fn fill(&mut self, buffer: &mut [u8]) -> Result<(), Self::Error> {
+        if buffer.len() > self.len() {
+            return Err(SliceReadError::EndOfSlice);
+        }
+        buffer.copy_from_slice(&self[..buffer.len()]);
+        *self = &self[buffer.len()..];
+        Ok(())
+    }
+
+    fn forward_bytes<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'a>,
+    {
         if len > self.len() {
             return Err(SliceReadError::EndOfSlice);
         }
         let result = &self[..len];
         *self = &self[len..];
-        Ok(result)
+
+        visitor.visit_borrowed_bytes(result)
+    }
+
+    fn forward_str<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'a>,
+    {
+        if len > self.len() {
+            return Err(SliceReadError::EndOfSlice);
+        }
+        let result = &self[..len];
+        *self = &self[len..];
+
+        let string = match str::from_utf8(result) {
+            Ok(s) => s,
+            Err(_) => return Err(SliceReadError::InvalidUtf8),
+        };
+
+        visitor.visit_borrowed_str(string)
     }
 }
 
@@ -69,4 +92,17 @@ impl<'a> CoreRead<'a> for &'a [u8] {
 pub enum SliceReadError {
     /// Tried reading more bytes than the slice contains.
     EndOfSlice,
+    InvalidUtf8,
+}
+
+impl serde::de::Error for SliceReadError {
+    fn custom<T: core::fmt::Display>(_cause: T) -> Self {
+        panic!("Custom error thrown: {}", _cause);
+    }
+}
+
+impl core::fmt::Display for SliceReadError {
+    fn fmt(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(fmt, "{:?}", self)
+    }
 }
