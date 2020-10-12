@@ -93,11 +93,11 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --features "embedded-hal"
+          args: --features embedded-hal-traits
 
       - name: Run cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --features "alloc,embedded-hal"
+          args: --features alloc,embedded-hal-traits
 
