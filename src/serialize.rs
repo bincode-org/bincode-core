@@ -35,7 +35,7 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
 /// let value = "your data structure goes here";
 ///
 /// serialize(value, &mut writer, options).unwrap();
-/// let written_len = writer.written_len();
+/// let written_len = writer.written_len() as u64;
 ///
 /// let measured_len = serialize_size(value, options).unwrap();
 ///
