@@ -7,21 +7,21 @@ use serde::serde_if_integer128;
 
 pub trait IntEncoding {
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn u16_size(n: u16) -> u64;
+    fn u16_size(n: u16) -> usize;
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn u32_size(n: u32) -> u64;
+    fn u32_size(n: u32) -> usize;
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn u64_size(n: u64) -> u64;
+    fn u64_size(n: u64) -> usize;
 
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn i16_size(n: i16) -> u64;
+    fn i16_size(n: i16) -> usize;
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn i32_size(n: i32) -> u64;
+    fn i32_size(n: i32) -> usize;
     /// Gets the size (in bytes) that a value would be serialized to.
-    fn i64_size(n: i64) -> u64;
+    fn i64_size(n: i64) -> usize;
 
     #[inline(always)]
-    fn len_size(len: usize) -> u64 {
+    fn len_size(len: usize) -> usize {
         Self::u64_size(len as u64)
     }
 
@@ -97,8 +97,8 @@ pub trait IntEncoding {
     ) -> Result<i64, DeserializeError<'de, R>>;
 
     serde_if_integer128! {
-        fn u128_size(v: u128) -> u64;
-        fn i128_size(v: i128) -> u64;
+        fn u128_size(v: u128) -> usize;
+        fn i128_size(v: i128) -> usize;
         fn serialize_u128<W: CoreWrite, O: Options>(
             ser: &mut Serializer<W, O>,
             val: u128,
@@ -176,15 +176,15 @@ const U64_BYTE: u8 = 253;
 const U128_BYTE: u8 = 254;
 
 impl VarintEncoding {
-    fn varint_size(n: u64) -> u64 {
+    fn varint_size(n: u64) -> usize {
         if n <= SINGLE_BYTE_MAX as u64 {
             1
         } else if n <= u16::max_value() as u64 {
-            (1 + size_of::<u16>()) as u64
+            1 + size_of::<u16>()
         } else if n <= u32::max_value() as u64 {
-            (1 + size_of::<u32>()) as u64
+            1 + size_of::<u32>()
         } else {
-            (1 + size_of::<u64>()) as u64
+            1 + size_of::<u64>()
         }
     }
 
@@ -263,21 +263,22 @@ impl VarintEncoding {
             if n % 2 == 0 {
                 (n / 2) as i128
             } else {
+
                 !(n / 2) as i128
             }
         }
 
-        fn varint128_size(n: u128) -> u64 {
+        fn varint128_size(n: u128) -> usize {
             if n <= SINGLE_BYTE_MAX as u128 {
                 1
             } else if n <= u16::max_value() as u128 {
-                (1 + size_of::<u16>()) as u64
+                1 + size_of::<u16>()
             } else if n <= u32::max_value() as u128 {
-                (1 + size_of::<u32>()) as u64
+                1 + size_of::<u32>()
             } else if n <= u64::max_value() as u128 {
-                (1 + size_of::<u64>()) as u64
+                1 + size_of::<u64>()
             } else {
-                (1 + size_of::<u128>()) as u64
+                1 + size_of::<u128>()
             }
         }
 
@@ -320,29 +321,29 @@ impl VarintEncoding {
 
 impl IntEncoding for FixintEncoding {
     #[inline(always)]
-    fn u16_size(_: u16) -> u64 {
-        size_of::<u16>() as u64
+    fn u16_size(_: u16) -> usize {
+        size_of::<u16>()
     }
     #[inline(always)]
-    fn u32_size(_: u32) -> u64 {
-        size_of::<u32>() as u64
+    fn u32_size(_: u32) -> usize {
+        size_of::<u32>()
     }
     #[inline(always)]
-    fn u64_size(_: u64) -> u64 {
-        size_of::<u64>() as u64
+    fn u64_size(_: u64) -> usize {
+        size_of::<u64>()
     }
 
     #[inline(always)]
-    fn i16_size(_: i16) -> u64 {
-        size_of::<i16>() as u64
+    fn i16_size(_: i16) -> usize {
+        size_of::<i16>()
     }
     #[inline(always)]
-    fn i32_size(_: i32) -> u64 {
-        size_of::<i32>() as u64
+    fn i32_size(_: i32) -> usize {
+        size_of::<i32>()
     }
     #[inline(always)]
-    fn i64_size(_: i64) -> u64 {
-        size_of::<i64>() as u64
+    fn i64_size(_: i64) -> usize {
+        size_of::<i64>()
     }
 
     #[inline(always)]
@@ -429,12 +430,12 @@ impl IntEncoding for FixintEncoding {
 
     serde_if_integer128! {
         #[inline(always)]
-        fn u128_size(_: u128) -> u64{
-            size_of::<u128>() as u64
+        fn u128_size(_: u128) -> usize {
+            size_of::<u128>()
         }
         #[inline(always)]
-        fn i128_size(_: i128) -> u64{
-            size_of::<i128>() as u64
+        fn i128_size(_: i128) -> usize {
+            size_of::<i128>()
         }
 
         #[inline(always)]
@@ -468,28 +469,28 @@ impl IntEncoding for FixintEncoding {
 
 impl IntEncoding for VarintEncoding {
     #[inline(always)]
-    fn u16_size(n: u16) -> u64 {
+    fn u16_size(n: u16) -> usize {
         Self::varint_size(n as u64)
     }
     #[inline(always)]
-    fn u32_size(n: u32) -> u64 {
+    fn u32_size(n: u32) -> usize {
         Self::varint_size(n as u64)
     }
     #[inline(always)]
-    fn u64_size(n: u64) -> u64 {
+    fn u64_size(n: u64) -> usize {
         Self::varint_size(n)
     }
 
     #[inline(always)]
-    fn i16_size(n: i16) -> u64 {
+    fn i16_size(n: i16) -> usize {
         Self::varint_size(Self::zigzag_encode(n as i64))
     }
     #[inline(always)]
-    fn i32_size(n: i32) -> u64 {
+    fn i32_size(n: i32) -> usize {
         Self::varint_size(Self::zigzag_encode(n as i64))
     }
     #[inline(always)]
-    fn i64_size(n: i64) -> u64 {
+    fn i64_size(n: i64) -> usize {
         Self::varint_size(Self::zigzag_encode(n))
     }
 
@@ -581,11 +582,11 @@ impl IntEncoding for VarintEncoding {
 
     serde_if_integer128! {
         #[inline(always)]
-        fn u128_size(n: u128) -> u64 {
+        fn u128_size(n: u128) -> usize {
             Self::varint128_size(n)
         }
         #[inline(always)]
-        fn i128_size(n: i128) -> u64 {
+        fn i128_size(n: i128) -> usize {
             Self::varint128_size(Self::zigzag128_encode(n))
         }
         #[inline(always)]

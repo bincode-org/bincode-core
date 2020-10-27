@@ -35,7 +35,7 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
 /// let value = "your data structure goes here";
 ///
 /// serialize(value, &mut writer, options).unwrap();
-/// let written_len = writer.written_len() as u64;
+/// let written_len = writer.written_len();
 ///
 /// let measured_len = serialize_size(value, options).unwrap();
 ///
@@ -45,7 +45,7 @@ pub fn serialize<T: serde::Serialize + ?Sized, W: CoreWrite, O: Options>(
 pub fn serialize_size<T: serde::Serialize + ?Sized, O: Options>(
     value: &T,
     options: O,
-) -> Result<u64, SerializeError<()>> {
+) -> Result<usize, SerializeError<()>> {
     let mut size_checker = crate::size_checker::SizeChecker { options, total: 0 };
     value.serialize(&mut size_checker)?;
     Ok(size_checker.total)
