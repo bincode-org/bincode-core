@@ -5,7 +5,7 @@ use serde::serde_if_integer128;
 
 pub(crate) struct SizeChecker<O: Options> {
     pub options: O,
-    pub total: u64,
+    pub total: usize,
 }
 
 impl<O: Options> CoreWrite for SizeChecker<O> {
@@ -17,7 +17,7 @@ impl<O: Options> CoreWrite for SizeChecker<O> {
 }
 
 impl<O: Options> SizeChecker<O> {
-    fn add_raw(&mut self, len: u64) -> Result<(), SerializeError<()>> {
+    fn add_raw(&mut self, len: usize) -> Result<(), SerializeError<()>> {
         self.total += len;
         Ok(())
     }
@@ -84,25 +84,25 @@ impl<'a, O: Options> serde::Serializer for &'a mut SizeChecker<O> {
     }
 
     fn serialize_f32(self, _: f32) -> Result<(), SerializeError<()>> {
-        self.add_raw(size_of::<f32>() as u64)
+        self.add_raw(size_of::<f32>())
     }
 
     fn serialize_f64(self, _: f64) -> Result<(), SerializeError<()>> {
-        self.add_raw(size_of::<f64>() as u64)
+        self.add_raw(size_of::<f64>())
     }
 
     fn serialize_str(self, v: &str) -> Result<(), SerializeError<()>> {
         self.add_len(v.len())?;
-        self.add_raw(v.len() as u64)
+        self.add_raw(v.len())
     }
 
     fn serialize_char(self, c: char) -> Result<(), SerializeError<()>> {
-        self.add_raw(encode_utf8(c).as_slice().len() as u64)
+        self.add_raw(encode_utf8(c).as_slice().len())
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<(), SerializeError<()>> {
         self.add_len(v.len())?;
-        self.add_raw(v.len() as u64)
+        self.add_raw(v.len())
     }
 
     fn serialize_none(self) -> Result<(), SerializeError<()>> {

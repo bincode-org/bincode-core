@@ -13,8 +13,8 @@ impl<'a> BufferWriter<'a> {
     }
 
     /// The bytes count written to the backing buffer.
-    pub fn written_len(&self) -> u64 {
-        self.index as u64
+    pub fn written_len(&self) -> usize {
+        self.index
     }
 
     /// A slice of the buffer that is in this writer. This is equivalent to getting a slice of the

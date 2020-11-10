@@ -134,7 +134,7 @@ pub trait Options: InternalOptions + Sized {
     fn serialized_size<T: ?Sized + serde::Serialize>(
         self,
         t: &T,
-    ) -> Result<u64, SerializeError<()>> {
+    ) -> Result<usize, SerializeError<()>> {
         crate::serialize::serialize_size(t, self)
     }
 
