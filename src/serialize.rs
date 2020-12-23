@@ -2,6 +2,9 @@ use super::*;
 use config::{BincodeByteOrder, IntEncoding, Options};
 use serde::{ser::*, serde_if_integer128};
 
+#[cfg(feature = "std")]
+use std::error::Error as StdError;
+
 /// Serialize a given `T` type into a given `CoreWrite` writer with the given `B` byte order.
 ///
 /// `T` can be any value that derives `serde::Serialize`.
@@ -81,6 +84,9 @@ impl<W: CoreWrite> serde::ser::Error for SerializeError<W> {
         panic!("Custom error: {}", _cause);
     }
 }
+
+#[cfg(feature = "std")]
+impl<W: CoreWrite> StdError for SerializeError<W> {}
 
 /// A serializer that can serialize any value that implements `serde::Serialize` into a given
 /// [CoreWrite] writer.

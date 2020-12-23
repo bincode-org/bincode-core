@@ -21,3 +21,6 @@ serde_derive = "1.0"
 [features]
 default = []
 alloc = ["serde/alloc"]
+
+# The std feature is necessary when compiling serde with std
+std = []
