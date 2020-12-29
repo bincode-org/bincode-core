@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
 //! Embedded bincode
 //!
@@ -19,6 +19,8 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 /// Contains helper structs to customize the way your structs are (de)serialized.
 pub mod config;
