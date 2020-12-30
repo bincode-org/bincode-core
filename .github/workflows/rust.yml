@@ -9,7 +9,7 @@ on: [push, pull_request]
 name: Rust
 
 jobs:
-  test_no_std:
+  tests:
     name: Test no_std
     runs-on: ubuntu-latest
     steps:
@@ -28,59 +28,17 @@ jobs:
         with:
           command: test
 
-  test_alloc:
-    name: Test alloc
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --features alloc
 
-  test_std:
-    name: Test std
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
           command: test
           args: --features std
-
-  test_alloc_std:
-    name: Test alloc and std
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1
