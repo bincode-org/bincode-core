@@ -19,6 +19,8 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 /// Contains helper structs to customize the way your structs are (de)serialized.
 pub mod config;

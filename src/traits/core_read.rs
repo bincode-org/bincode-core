@@ -1,5 +1,8 @@
 use core::str;
 
+#[cfg(feature = "std")]
+use std::error::Error as StdError;
+
 /// A target that can be read from. This is similar to `std::io::Read`, but the std trait is not
 /// available in `#![no_std]` projects.
 ///
@@ -106,3 +109,6 @@ impl core::fmt::Display for SliceReadError {
         write!(fmt, "{:?}", self)
     }
 }
+
+#[cfg(feature = "std")]
+impl StdError for SliceReadError {}

@@ -7,6 +7,9 @@ use serde::{de::*, serde_if_integer128};
 // #[cfg(feature = "alloc")]
 // use alloc::{string::String, vec::Vec};
 
+#[cfg(feature = "std")]
+use std::error::Error as StdError;
+
 /// Deserialize a given object from the given [CoreRead] object.
 ///
 /// Rust will detect the first two generic arguments automatically. The third generic argument
@@ -140,6 +143,9 @@ impl<'a, R: CoreRead<'a>> Error for DeserializeError<'a, R> {
         panic!("Custom error thrown: {}", _cause);
     }
 }
+
+#[cfg(feature = "std")]
+impl<'a, R: CoreRead<'a>> StdError for DeserializeError<'a, R> {}
 
 /// A deserializer that can be used to deserialize any `serde::Deserialize` type from a given
 /// [CoreRead] reader.
